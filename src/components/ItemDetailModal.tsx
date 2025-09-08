@@ -6,9 +6,10 @@ interface ItemDetailModalProps {
   item: InventoryItem;
   onClose: () => void;
   onEdit: () => void;
+  onViewLogs: () => void;
 }
 
-const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, onClose, onEdit }) => {
+const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, onClose, onEdit, onViewLogs }) => {
   // Determine stock status
   const getStockStatus = () => {
     if (item.quantity <= 0) return 'Out of Stock';
@@ -165,6 +166,9 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, onClose, onEdit
           </ScrollView>
           
           <View style={styles.buttonContainer}>
+            <TouchableOpacity style={styles.logButton} onPress={onViewLogs}>
+              <Text style={styles.logButtonText}>View Logs</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.editButton} onPress={onEdit}>
               <Text style={styles.editButtonText}>Edit Item</Text>
             </TouchableOpacity>
@@ -281,13 +285,27 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
-  editButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
+  logButton: {
+    backgroundColor: '#5856D6',
+    paddingHorizontal: 15,
     paddingVertical: 15,
     borderRadius: 8,
     flex: 1,
-    marginRight: 10,
+    marginRight: 5,
+  },
+  logButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  editButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 5,
   },
   editButtonText: {
     color: 'white',
@@ -297,11 +315,11 @@ const styles = StyleSheet.create({
   },
   closeButtonBottom: {
     backgroundColor: '#f0f0f0',
-    paddingHorizontal: 20,
+    paddingHorizontal: 15,
     paddingVertical: 15,
     borderRadius: 8,
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 5,
   },
   closeButtonBottomText: {
     color: '#333',

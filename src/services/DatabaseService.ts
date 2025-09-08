@@ -1,124 +1,15 @@
 import * as SQLite from 'expo-sqlite';
 import { User, UserRole } from '../models/User';
 import { InventoryItem, InventoryTransaction } from '../models/Inventory';
-import { StockOpname, StockOpnameItem } from '../models/StockOpname';
 
 // Open database
 let db: SQLite.SQLiteDatabase | null = null;
 
-const openDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
+export const openDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
   if (!db) {
     db = await SQLite.openDatabaseAsync('posman.db');
   }
   return db;
-};
-
-// Check if the inventory_items table has the correct schema
-const validateInventoryItemsSchema = async (database: SQLite.SQLiteDatabase): Promise<boolean> => {
-  try {
-    // Get the table info
-    const tableInfo: any[] = await database.getAllAsync("PRAGMA table_info(inventory_items);");
-    
-    // Check if the 'code' column exists
-    const hasCodeColumn = tableInfo.some(column => column.name === 'code');
-    
-    // Check if the primary key is set correctly
-    const primaryKeyColumn = tableInfo.find(column => column.pk === 1);
-    const hasCorrectPrimaryKey = primaryKeyColumn && primaryKeyColumn.name === 'code';
-    
-    return hasCodeColumn && hasCorrectPrimaryKey;
-  } catch (error) {
-    console.error('Error validating inventory_items schema:', error);
-    return false;
-  }
-};
-
-// Recreate inventory_items table with correct schema
-const recreateInventoryItemsTable = async (database: SQLite.SQLiteDatabase): Promise<void> => {
-  try {
-    // Begin transaction
-    await database.execAsync('BEGIN TRANSACTION;');
-    
-    // Create new table with correct schema
-    await database.execAsync(`
-      CREATE TABLE IF NOT EXISTS inventory_items_new (
-        code TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        description TEXT,
-        category TEXT,
-        price REAL NOT NULL,
-        cost REAL NOT NULL,
-        quantity INTEGER NOT NULL,
-        sku TEXT UNIQUE,
-        supplier TEXT,
-        reorderLevel INTEGER NOT NULL,
-        isActive INTEGER NOT NULL DEFAULT 1,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL
-      );
-    `);
-    
-    // Check if old table exists and has data
-    try {
-      const oldTableExists: any = await database.getFirstAsync(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='inventory_items';"
-      );
-      
-      if (oldTableExists) {
-        // Copy data from old table if it exists
-        const oldData: any[] = await database.getAllAsync('SELECT * FROM inventory_items;');
-        if (oldData.length > 0) {
-          // Insert data into new table
-          for (const item of oldData) {
-            await database.runAsync(
-              `INSERT INTO inventory_items_new (
-                code, name, description, category, price, cost, quantity, 
-                sku, supplier, reorderLevel, isActive, createdAt, updatedAt
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-              [
-                item.code || item.id || item.barcode, // Try different possible column names
-                item.name,
-                item.description,
-                item.category,
-                item.price,
-                item.cost,
-                item.quantity,
-                item.sku,
-                item.supplier,
-                item.reorderLevel || 0,
-                item.isActive || 1,
-                item.createdAt || new Date().toISOString(),
-                item.updatedAt || new Date().toISOString()
-              ]
-            );
-          }
-        }
-        
-        // Drop old table
-        await database.execAsync('DROP TABLE inventory_items;');
-      }
-    } catch (error) {
-      console.warn('Warning: Could not migrate data from old inventory_items table:', error);
-    }
-    
-    // Rename new table to correct name
-    await database.execAsync('ALTER TABLE inventory_items_new RENAME TO inventory_items;');
-    
-    // Commit transaction
-    await database.execAsync('COMMIT;');
-    
-    console.log('Successfully recreated inventory_items table with correct schema');
-  } catch (error) {
-    // Rollback transaction on error
-    try {
-      await database.execAsync('ROLLBACK;');
-    } catch (rollbackError) {
-      console.error('Error during rollback:', rollbackError);
-    }
-    
-    console.error('Error recreating inventory_items table:', error);
-    throw error;
-  }
 };
 
 // Initialize database with all tables
@@ -141,7 +32,7 @@ export const initDatabase = async (): Promise<void> => {
       );
     `);
     
-    // Create inventory_items table with unified code field
+    // Create inventory_items table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS inventory_items (
         code TEXT PRIMARY KEY,
@@ -160,13 +51,6 @@ export const initDatabase = async (): Promise<void> => {
       );
     `);
     
-    // Validate inventory_items schema and recreate if needed
-    const isSchemaValid = await validateInventoryItemsSchema(database);
-    if (!isSchemaValid) {
-      console.log('Inventory items table schema is invalid, recreating...');
-      await recreateInventoryItemsTable(database);
-    }
-    
     // Create inventory_transactions table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS inventory_transactions (
@@ -183,32 +67,36 @@ export const initDatabase = async (): Promise<void> => {
       );
     `);
     
-    // Create stock_opname table
+    // Create so_history table for stock opname history
     await database.execAsync(`
-      CREATE TABLE IF NOT EXISTS stock_opname (
+      CREATE TABLE IF NOT EXISTS so_history (
         id TEXT PRIMARY KEY,
         date TEXT NOT NULL,
-        startTime TEXT NOT NULL,
-        endTime TEXT,
-        type TEXT NOT NULL,
-        status TEXT NOT NULL,
-        createdBy TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        userName TEXT NOT NULL,
+        totalItems INTEGER NOT NULL,
+        totalDifference INTEGER NOT NULL,
+        totalRpDifference REAL NOT NULL,
+        duration INTEGER NOT NULL, -- in seconds
+        items TEXT NOT NULL, -- JSON string of items
         createdAt TEXT NOT NULL
       );
     `);
     
-    // Create stock_opname_items table
+    // Create so_monitoring table for stock opname monitoring
     await database.execAsync(`
-      CREATE TABLE IF NOT EXISTS stock_opname_items (
+      CREATE TABLE IF NOT EXISTS so_monitoring (
         id TEXT PRIMARY KEY,
-        opnameId TEXT NOT NULL,
         itemCode TEXT NOT NULL,
-        systemQuantity INTEGER NOT NULL,
-        actualQuantity INTEGER,
-        difference INTEGER,
-        status TEXT,
+        itemName TEXT NOT NULL,
+        date TEXT NOT NULL,
+        soCount INTEGER NOT NULL DEFAULT 1,
+        totalDifference INTEGER NOT NULL,
+        totalRpDifference REAL NOT NULL,
+        consecutiveSOCount INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL, -- 'normal', 'warning', 'critical'
+        notes TEXT,
         createdAt TEXT NOT NULL,
-        FOREIGN KEY (opnameId) REFERENCES stock_opname (id),
         FOREIGN KEY (itemCode) REFERENCES inventory_items (code)
       );
     `);
@@ -749,8 +637,9 @@ export const createInventoryTransaction = async (transaction: Omit<InventoryTran
 export const getInventoryTransactionsByItemCode = async (itemCode: string): Promise<InventoryTransaction[]> => {
   try {
     const database = await openDatabase();
+    // Kembali ke nama kolom dengan huruf kapital untuk konsistensi
     const result: any[] = await database.getAllAsync(
-      'SELECT * FROM inventory_transactions WHERE itemCode = ? ORDER BY createdAt DESC;',
+      'SELECT * FROM inventory_transactions WHERE itemCode = ? ORDER BY createdAt DESC',
       [itemCode]
     );
     
@@ -771,194 +660,161 @@ export const getInventoryTransactionsByItemCode = async (itemCode: string): Prom
   }
 };
 
-// Stock Opname Operations
+// SO Monitoring functions
 
-// Create a new stock opname record
-export const createStockOpname = async (opname: Omit<StockOpname, 'id' | 'createdAt'>): Promise<StockOpname> => {
+// Add SO monitoring record
+export const addSOMonitoringRecord = async (record: {
+  itemCode: string;
+  itemName: string;
+  date: string;
+  soCount?: number;
+  totalDifference: number;
+  totalRpDifference: number;
+  consecutiveSOCount?: number;
+  status: 'normal' | 'warning' | 'critical';
+  notes?: string;
+}): Promise<void> => {
   try {
     const database = await openDatabase();
     const id = Math.random().toString(36).substring(2, 15);
     const createdAt = new Date().toISOString();
     
     await database.runAsync(
-      `INSERT INTO stock_opname (id, date, startTime, endTime, type, status, createdBy, createdAt) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+      `INSERT INTO so_monitoring (
+        id, itemCode, itemName, date, soCount, totalDifference, totalRpDifference, 
+        consecutiveSOCount, status, notes, createdAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       [
         id,
-        opname.date.toISOString(),
-        opname.startTime.toISOString(),
-        opname.endTime?.toISOString() || null,
-        opname.type,
-        opname.status,
-        opname.createdBy,
+        record.itemCode,
+        record.itemName,
+        record.date,
+        record.soCount || 1,
+        record.totalDifference,
+        record.totalRpDifference,
+        record.consecutiveSOCount || 0,
+        record.status,
+        record.notes || null,
         createdAt
       ]
     );
-    
-    return {
-      id,
-      date: opname.date,
-      startTime: opname.startTime,
-      endTime: opname.endTime,
-      type: opname.type,
-      status: opname.status,
-      createdBy: opname.createdBy,
-      createdAt: new Date(createdAt)
-    };
   } catch (error) {
-    console.error('Error creating stock opname:', error);
+    console.error('Error adding SO monitoring record:', error);
     throw error;
   }
 };
 
-// Create stock opname item
-export const createStockOpnameItem = async (item: Omit<StockOpnameItem, 'id' | 'createdAt'>): Promise<StockOpnameItem> => {
-  try {
-    const database = await openDatabase();
-    const id = Math.random().toString(36).substring(2, 15);
-    const createdAt = new Date().toISOString();
-    
-    await database.runAsync(
-      `INSERT INTO stock_opname_items (id, opnameId, itemCode, systemQuantity, actualQuantity, difference, status, createdAt) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
-      [
-        id,
-        item.opnameId,
-        item.itemCode,
-        item.systemQuantity,
-        item.actualQuantity || null,
-        item.difference || null,
-        item.status || null,
-        createdAt
-      ]
-    );
-    
-    return {
-      id,
-      opnameId: item.opnameId,
-      itemCode: item.itemCode,
-      systemQuantity: item.systemQuantity,
-      actualQuantity: item.actualQuantity,
-      difference: item.difference,
-      status: item.status,
-      createdAt: new Date(createdAt)
-    };
-  } catch (error) {
-    console.error('Error creating stock opname item:', error);
-    throw error;
-  }
-};
-
-// Update stock opname status
-export const updateStockOpnameStatus = async (id: string, status: StockOpname['status'], endTime?: Date): Promise<void> => {
-  try {
-    const database = await openDatabase();
-    
-    if (endTime) {
-      await database.runAsync(
-        'UPDATE stock_opname SET status = ?, endTime = ? WHERE id = ?;',
-        [status, endTime.toISOString(), id]
-      );
-    } else {
-      await database.runAsync(
-        'UPDATE stock_opname SET status = ? WHERE id = ?;',
-        [status, id]
-      );
-    }
-  } catch (error) {
-    console.error('Error updating stock opname status:', error);
-    throw error;
-  }
-};
-
-// Get stock opname by ID
-export const getStockOpnameById = async (id: string): Promise<StockOpname | null> => {
-  try {
-    const database = await openDatabase();
-    const result: any = await database.getFirstAsync(
-      'SELECT * FROM stock_opname WHERE id = ?;',
-      [id]
-    );
-    
-    if (result) {
-      return {
-        id: result.id,
-        date: new Date(result.date),
-        startTime: new Date(result.startTime),
-        endTime: result.endTime ? new Date(result.endTime) : undefined,
-        type: result.type,
-        status: result.status,
-        createdBy: result.createdBy,
-        createdAt: new Date(result.createdAt)
-      };
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error getting stock opname by ID:', error);
-    throw error;
-  }
-};
-
-// Get stock opname items by opname ID
-export const getStockOpnameItemsByOpnameId = async (opnameId: string): Promise<StockOpnameItem[]> => {
+// Get SO monitoring records by item code
+export const getSOMonitoringRecordsByItemCode = async (itemCode: string): Promise<any[]> => {
   try {
     const database = await openDatabase();
     const result: any[] = await database.getAllAsync(
-      'SELECT * FROM stock_opname_items WHERE opnameId = ? ORDER BY createdAt;',
-      [opnameId]
+      'SELECT * FROM so_monitoring WHERE itemCode = ? ORDER BY date DESC',
+      [itemCode]
     );
     
-    return result.map((item) => ({
-      id: item.id,
-      opnameId: item.opnameId,
-      itemCode: item.itemCode,
-      systemQuantity: parseInt(item.systemQuantity),
-      actualQuantity: item.actualQuantity !== null ? parseInt(item.actualQuantity) : undefined,
-      difference: item.difference !== null ? parseInt(item.difference) : undefined,
-      status: item.status || undefined,
-      createdAt: new Date(item.createdAt)
+    return result.map(record => ({
+      id: record.id,
+      itemCode: record.itemCode,
+      itemName: record.itemName,
+      date: record.date,
+      soCount: record.soCount,
+      totalDifference: record.totalDifference,
+      totalRpDifference: record.totalRpDifference,
+      consecutiveSOCount: record.consecutiveSOCount,
+      status: record.status,
+      notes: record.notes,
+      createdAt: new Date(record.createdAt)
     }));
   } catch (error) {
-    console.error('Error getting stock opname items:', error);
+    console.error('Error getting SO monitoring records:', error);
     throw error;
   }
 };
 
-// Fungsi debug untuk memeriksa data di database
-export const debugPrintAllItems = async (): Promise<void> => {
+// Get all SO monitoring records
+export const getAllSOMonitoringRecords = async (): Promise<any[]> => {
   try {
     const database = await openDatabase();
-    const result: any[] = await database.getAllAsync('SELECT * FROM inventory_items;');
-    console.log('=== DEBUG: Semua item dalam database ===');
-    result.forEach((item, index) => {
-      console.log(`${index + 1}. Code: ${item.code}, Name: ${item.name}, SKU: ${item.sku || '(kosong)'}`);
-    });
-    console.log('=====================================');
+    const result: any[] = await database.getAllAsync(
+      'SELECT * FROM so_monitoring ORDER BY date DESC'
+    );
+    
+    return result.map(record => ({
+      id: record.id,
+      itemCode: record.itemCode,
+      itemName: record.itemName,
+      date: record.date,
+      soCount: record.soCount,
+      totalDifference: record.totalDifference,
+      totalRpDifference: record.totalRpDifference,
+      consecutiveSOCount: record.consecutiveSOCount,
+      status: record.status,
+      notes: record.notes,
+      createdAt: new Date(record.createdAt)
+    }));
   } catch (error) {
-    console.error('Error debugging items:', error);
+    console.error('Error getting all SO monitoring records:', error);
+    throw error;
   }
 };
 
-// Fungsi debug untuk mencari item berdasarkan SKU
-export const debugFindItemBySku = async (sku: string): Promise<void> => {
+// Update SO monitoring record
+export const updateSOMonitoringRecord = async (id: string, updates: Partial<any>): Promise<void> => {
   try {
     const database = await openDatabase();
-    const result: any = await database.getFirstAsync(
-      'SELECT * FROM inventory_items WHERE sku = ?;',
-      [sku]
-    );
-    console.log(`=== DEBUG: Mencari item dengan SKU "${sku}" ===`);
-    if (result) {
-      console.log('Item ditemukan:');
-      console.log(`  Code: ${result.code}`);
-      console.log(`  Name: ${result.name}`);
-      console.log(`  SKU: ${result.sku || '(kosong)'}`);
-    } else {
-      console.log('Item tidak ditemukan');
+    const timestamp = new Date().toISOString();
+    
+    // Build dynamic update query
+    const fields = [];
+    const values = [];
+    
+    if (updates.soCount !== undefined) {
+      fields.push('soCount = ?');
+      values.push(updates.soCount);
     }
-    console.log('=====================================');
+    if (updates.totalDifference !== undefined) {
+      fields.push('totalDifference = ?');
+      values.push(updates.totalDifference);
+    }
+    if (updates.totalRpDifference !== undefined) {
+      fields.push('totalRpDifference = ?');
+      values.push(updates.totalRpDifference);
+    }
+    if (updates.consecutiveSOCount !== undefined) {
+      fields.push('consecutiveSOCount = ?');
+      values.push(updates.consecutiveSOCount);
+    }
+    if (updates.status !== undefined) {
+      fields.push('status = ?');
+      values.push(updates.status);
+    }
+    if (updates.notes !== undefined) {
+      fields.push('notes = ?');
+      values.push(updates.notes);
+    }
+    
+    fields.push('createdAt = ?');
+    values.push(timestamp);
+    
+    values.push(id);
+    
+    const query = `UPDATE so_monitoring SET ${fields.join(', ')} WHERE id = ?;`;
+    
+    await database.runAsync(query, values);
   } catch (error) {
-    console.error('Error debugging item by SKU:', error);
+    console.error('Error updating SO monitoring record:', error);
+    throw error;
+  }
+};
+
+// Delete SO monitoring record
+export const deleteSOMonitoringRecord = async (id: string): Promise<void> => {
+  try {
+    const database = await openDatabase();
+    await database.runAsync('DELETE FROM so_monitoring WHERE id = ?;', [id]);
+  } catch (error) {
+    console.error('Error deleting SO monitoring record:', error);
+    throw error;
   }
 };

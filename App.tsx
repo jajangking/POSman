@@ -5,7 +5,14 @@ import LoginPanel from './src/components/LoginPanel';
 import HomeDashboard from './src/components/HomeDashboard';
 import InventoryScreen from './src/components/InventoryScreen';
 import AdminDashboard from './src/components/AdminDashboard';
-import StockOpnameScreen from './src/components/StockOpnameScreen';
+import StockOpname from './src/components/StockOpname';
+import PartialSO from './src/components/PartialSO';
+import GrandSO from './src/components/GrandSO';
+import EditSO from './src/components/EditSO';
+import SOReportScreen from './src/components/SOReportScreen';
+import SOHistoryScreen from './src/components/SOHistoryScreen';
+import MonitoringItemsScreen from './src/components/MonitoringItemsScreen';
+import ItemLogScreen from './src/components/ItemLogScreen';
 import { User } from './src/models/User';
 
 // Main app component wrapped with AuthProvider
@@ -20,7 +27,10 @@ export default function App() {
 // App content that uses authentication
 const AppContent: React.FC = () => {
   const { currentUser, isAuthenticated, login, logout, isLoading } = useAuth();
-  const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stock-opname'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog'>('home');
+  const [soItems, setSoItems] = useState<any[]>([]); // State to hold SO items data
+  const [soReportData, setSoReportData] = useState<any>(null); // State to hold SO report data
+  const [itemLogData, setItemLogData] = useState<{code: string, name: string} | null>(null); // State to hold item log data
 
   // Handle hardware back button
   useEffect(() => {
@@ -51,7 +61,7 @@ const AppContent: React.FC = () => {
     login(user);
   };
 
-  const handleNavigate = (view: 'home' | 'inventory' | 'admin' | 'stock-opname') => {
+  const handleNavigate = (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog') => {
     setCurrentView(view);
   };
 
@@ -91,8 +101,57 @@ const AppContent: React.FC = () => {
       {currentView === 'admin' && currentUser?.role === 'admin' && (
         <AdminDashboard onBack={() => handleNavigate('home')} />
       )}
-      {currentView === 'stock-opname' && (
-        <StockOpnameScreen onBack={() => handleNavigate('home')} />
+      {currentView === 'stockOpname' && (
+        <StockOpname 
+          onBack={() => handleNavigate('home')} 
+          onNavigate={handleNavigate}
+        />
+      )}
+      {currentView === 'partialSO' && (
+        <PartialSO 
+          onBack={() => handleNavigate('home')} 
+          onNavigateToEditSO={(items) => {
+            setSoItems(items);
+            handleNavigate('editSO');
+          }}
+        />
+      )}
+      {currentView === 'grandSO' && (
+        <GrandSO onBack={() => handleNavigate('home')} />
+      )}
+      {currentView === 'editSO' && (
+        <EditSO 
+          onBack={(reportData) => {
+            setSoReportData(reportData);
+            handleNavigate('soReport');
+          }} 
+          items={soItems} 
+          currentUser={currentUser}
+        />
+      )}
+      {currentView === 'soReport' && (
+        <SOReportScreen 
+          onBack={() => handleNavigate('soHistory')} 
+          reportData={soReportData}
+        />
+      )}
+      {currentView === 'soHistory' && (
+        <SOHistoryScreen 
+          onBack={() => handleNavigate('home')} 
+          onViewReport={() => handleNavigate('soReport')}
+        />
+      )}
+      {currentView === 'monitoring' && (
+        <MonitoringItemsScreen 
+          onBack={() => handleNavigate('home')}
+        />
+      )}
+      {currentView === 'itemLog' && itemLogData && (
+        <ItemLogScreen 
+          itemCode={itemLogData.code}
+          itemName={itemLogData.name}
+          onBack={() => handleNavigate('inventory')}
+        />
       )}
     </View>
   );

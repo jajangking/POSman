@@ -5,7 +5,7 @@ import { User } from '../models/User';
 
 interface HomeDashboardProps {
   user: User;
-  onNavigate: (view: 'home' | 'inventory' | 'admin' | 'stock-opname') => void;
+  onNavigate: (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'soHistory' | 'monitoring') => void;
   onLogout: () => void;
 }
 
@@ -68,13 +68,31 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
               {(user.role === 'admin' || user.role === 'staff') && (
                 <TouchableOpacity 
                   style={styles.actionCard} 
-                  onPress={() => onNavigate('stock-opname')}
+                  onPress={() => onNavigate('stockOpname')}
                 >
                   <Text style={styles.actionIcon}>📋</Text>
                   <Text style={styles.actionTitle}>Stock Opname</Text>
-                  <Text style={styles.actionDescription}>Perform inventory reconciliation</Text>
+                  <Text style={styles.actionDescription}>Inventory reconciliation</Text>
                 </TouchableOpacity>
               )}
+              
+              <TouchableOpacity 
+                style={styles.actionCard} 
+                onPress={() => onNavigate('soHistory')}
+              >
+                <Text style={styles.actionIcon}>📊</Text>
+                <Text style={styles.actionTitle}>Riwayat SO</Text>
+                <Text style={styles.actionDescription}>Riwayat dan analisis SO</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.actionCard} 
+                onPress={() => onNavigate('monitoring')}
+              >
+                <Text style={styles.actionIcon}>🔍</Text>
+                <Text style={styles.actionTitle}>Pemantauan</Text>
+                <Text style={styles.actionDescription}>Barang yang perlu dipantau</Text>
+              </TouchableOpacity>
             </View>
 
             {user.role === 'admin' && (

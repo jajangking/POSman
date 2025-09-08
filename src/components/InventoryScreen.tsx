@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, Text, BackHandler, Alert } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 import InventoryManagement from './InventoryManagement';
 import InventoryForm from './InventoryForm';
+import ItemLogScreen from './ItemLogScreen';
 import { InventoryItem } from '../models/Inventory';
 
 interface InventoryScreenProps {
@@ -10,7 +11,7 @@ interface InventoryScreenProps {
 }
 
 const InventoryScreen: React.FC<InventoryScreenProps> = ({ onBack }) => {
-  const [view, setView] = useState<'list' | 'form'>('list');
+  const [view, setView] = useState<'list' | 'form' | 'log'>('list');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | undefined>(undefined);
 
   const handleAddItem = () => {
@@ -21,6 +22,11 @@ const InventoryScreen: React.FC<InventoryScreenProps> = ({ onBack }) => {
   const handleEditItem = (item: InventoryItem) => {
     setSelectedItem(item);
     setView('form');
+  };
+
+  const handleViewItemLog = (item: InventoryItem) => {
+    setSelectedItem(item);
+    setView('log');
   };
 
   const handleSave = () => {
@@ -68,14 +74,21 @@ const InventoryScreen: React.FC<InventoryScreenProps> = ({ onBack }) => {
           <InventoryManagement 
             onAddItem={handleAddItem} 
             onEditItem={handleEditItem} 
+            onViewItemLog={handleViewItemLog}
           />
-        ) : (
+        ) : view === 'form' ? (
           <InventoryForm 
             item={selectedItem} 
             onSave={handleSave} 
             onCancel={handleCancel} 
           />
-        )}
+        ) : view === 'log' && selectedItem ? (
+          <ItemLogScreen
+            itemCode={selectedItem.code}
+            itemName={selectedItem.name}
+            onBack={() => setView('list')}
+          />
+        ) : null}
       </View>
     </SafeAreaView>
   );

@@ -7,6 +7,7 @@ import InventoryItemComponent from './InventoryItem';
 import CompactInventoryItem from './CompactInventoryItem';
 import InventorySearch from './InventorySearch';
 import ItemDetailModal from './ItemDetailModal';
+import ItemLogScreen from './ItemLogScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define column configuration
@@ -45,6 +46,7 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({ onAddItem, on
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [showItemDetail, setShowItemDetail] = useState(false);
+  const [showItemLog, setShowItemLog] = useState(false);
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>([
     { id: 'no', label: 'No', key: 'no', width: 30, visible: true, order: 0 },
@@ -149,9 +151,7 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({ onAddItem, on
   const handleDeleteItem = async (code: string, name: string) => {
     Alert.alert(
       'Delete Item',
-      `Are you sure you want to delete "${name}"?
-
-This action cannot be undone.`,
+      `Are you sure you want to delete "${name}"?\n\nThis action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -361,11 +361,7 @@ This action cannot be undone.`,
     
     Alert.alert(
       `Delete ${selectedItems.size} Item${selectedItems.size > 1 ? 's' : ''}`,
-      `Are you sure you want to delete the following ${itemText}?
-
-${selectedItemsList}
-
-This action cannot be undone.`,
+      `Are you sure you want to delete the following ${itemText}?\n\n${selectedItemsList}\n\nThis action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -491,6 +487,12 @@ This action cannot be undone.`,
   const handleItemPress = (item: InventoryItem) => {
     setSelectedItem(item);
     setShowItemDetail(true);
+  };
+
+  const handleViewLogs = (item: InventoryItem) => {
+    setSelectedItem(item);
+    setShowItemDetail(false);
+    setShowItemLog(true);
   };
 
   const renderInventoryItem = ({ item, index }: { item: InventoryItem, index: number }) => (
@@ -740,7 +742,22 @@ This action cannot be undone.`,
               setShowItemDetail(false);
               onEditItem(selectedItem);
             }}
+            onViewLogs={() => handleViewLogs(selectedItem)}
           />
+        )}
+        {showItemLog && selectedItem && (
+          <Modal
+            animationType="slide"
+            presentationStyle="pageSheet"
+            visible={showItemLog}
+            onRequestClose={() => setShowItemLog(false)}
+          >
+            <ItemLogScreen
+              itemCode={selectedItem.code}
+              itemName={selectedItem.name}
+              onBack={() => setShowItemLog(false)}
+            />
+          </Modal>
         )}
       </View>
     </SafeAreaView>

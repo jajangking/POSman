@@ -12,11 +12,25 @@ import {
 } from '../services/DatabaseService';
 import { InventoryItem, InventoryTransaction, formatRupiah } from '../models/Inventory';
 
-// Get all inventory items
+// Get all inventory items sorted by category
 export const fetchAllInventoryItems = async (): Promise<InventoryItem[]> => {
   try {
     const items = await getAllInventoryItems();
-    return items;
+    // Sort items by category and then by name
+    return items.sort((a, b) => {
+      // Sort by category first
+      const categoryA = a.category || 'Tidak Berkategori';
+      const categoryB = b.category || 'Tidak Berkategori';
+      
+      if (categoryA < categoryB) return -1;
+      if (categoryA > categoryB) return 1;
+      
+      // If categories are the same, sort by name
+      if (a.name < b.name) return -1;
+      if (a.name > b.name) return 1;
+      
+      return 0;
+    });
   } catch (error) {
     console.error('Error fetching inventory items:', error);
     throw error;
