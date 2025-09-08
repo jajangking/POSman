@@ -48,7 +48,6 @@ const ItemListModal: React.FC<ItemListModalProps> = ({ visible, onClose, onSelec
         <Text style={styles.itemName}>{item.name}</Text>
         <Text style={styles.itemCode}>Kode: {item.code}</Text>
       </View>
-      <Text style={styles.itemQuantity}>{item.quantity}</Text>
     </TouchableOpacity>
   );
 
@@ -156,13 +155,6 @@ const styles = StyleSheet.create({
   itemCode: {
     fontSize: 14,
     color: '#666',
-  },
-  itemQuantity: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    width: 40,
-    textAlign: 'right',
   },
 });
 

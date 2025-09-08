@@ -113,62 +113,68 @@ const SOHistoryScreen: React.FC<SOHistoryScreenProps> = ({ onBack, onViewReport 
     });
   };
 
-  const renderHistoryItem = ({ item }: { item: SOHistoryItem }) => (
-    <TouchableOpacity 
-      style={[styles.historyItem, selectedItems.includes(item.id) && styles.selectedItem]} 
-      onPress={() => {
-        if (isSelectMode) {
-          toggleItemSelection(item.id);
-        } else {
-          onViewReport && onViewReport(item.id);
-        }
-      }}
-      onLongPress={() => {
-        if (!isSelectMode) {
-          setIsSelectMode(true);
-          toggleItemSelection(item.id);
-        }
-      }}
-    >
-      {isSelectMode && (
-        <View style={styles.checkboxContainer}>
-          <View style={[styles.checkbox, selectedItems.includes(item.id) && styles.checked]}>
-            {selectedItems.includes(item.id) && <Text style={styles.checkmark}>✓</Text>}
+  const renderHistoryItem = ({ item }: { item: SOHistoryItem }) => {
+    return (
+      <TouchableOpacity 
+        style={[styles.historyItem, selectedItems.includes(item.id) && styles.selectedItem]} 
+        onPress={() => {
+          if (isSelectMode) {
+            toggleItemSelection(item.id);
+          } else {
+            onViewReport && onViewReport(item.id);
+          }
+        }}
+        onLongPress={() => {
+          if (!isSelectMode) {
+            setIsSelectMode(true);
+            toggleItemSelection(item.id);
+          }
+        }}
+      >
+        {isSelectMode && (
+          <View style={styles.checkboxContainer}>
+            <View style={[styles.checkbox, selectedItems.includes(item.id) && styles.checked]}>
+              {selectedItems.includes(item.id) && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+          </View>
+        )}
+        <View style={styles.historyItemContent}>
+          <View style={styles.historyItemHeader}>
+            <Text style={styles.historyDate}>{formatDate(item.date)}</Text>
+            <Text style={styles.historyUser}>{item.user}</Text>
+          </View>
+          <View style={styles.historyItemDetails}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>ID SO:</Text>
+              <Text style={styles.detailValue}>{item.id}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Total Item:</Text>
+              <Text style={styles.detailValue}>{item.totalItems}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Selisih Qty:</Text>
+              <Text style={[styles.detailValue, item.totalDifference < 0 ? styles.minusText : styles.plusText]}>
+                {item.totalDifference > 0 ? `+${item.totalDifference}` : item.totalDifference}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Selisih Rp:</Text>
+              <Text style={[styles.detailValue, item.totalRpDifference < 0 ? styles.minusText : styles.plusText]}>
+                {item.totalRpDifference > 0 ? 
+                  `+Rp ${Math.abs(item.totalRpDifference).toLocaleString('id-ID')}` : 
+                  `-Rp ${Math.abs(item.totalRpDifference).toLocaleString('id-ID')}`}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Durasi:</Text>
+              <Text style={styles.detailValue}>{formatDuration(item.duration)}</Text>
+            </View>
           </View>
         </View>
-      )}
-      <View style={styles.historyItemContent}>
-        <View style={styles.historyItemHeader}>
-          <Text style={styles.historyDate}>{formatDate(item.date)}</Text>
-          <Text style={styles.historyUser}>{item.user}</Text>
-        </View>
-        <View style={styles.historyItemDetails}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Total Item:</Text>
-            <Text style={styles.detailValue}>{item.totalItems}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Selisih Qty:</Text>
-            <Text style={[styles.detailValue, item.totalDifference < 0 ? styles.minusText : styles.plusText]}>
-              {item.totalDifference > 0 ? `+${item.totalDifference}` : item.totalDifference}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Selisih Rp:</Text>
-            <Text style={[styles.detailValue, item.totalRpDifference < 0 ? styles.minusText : styles.plusText]}>
-              {item.totalRpDifference > 0 ? 
-                `+Rp ${Math.abs(item.totalRpDifference).toLocaleString('id-ID')}` : 
-                `-Rp ${Math.abs(item.totalRpDifference).toLocaleString('id-ID')}`}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Durasi:</Text>
-            <Text style={styles.detailValue}>{formatDuration(item.duration)}</Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (

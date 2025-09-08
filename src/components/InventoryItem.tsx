@@ -11,9 +11,10 @@ interface InventoryItemProps {
   isSelected?: boolean;
   onSelect?: (code: string, selected: boolean) => void;
   editMode?: boolean;
+  onViewItemLog?: (item: InventoryItem) => void; // Tambahkan prop untuk navigasi ke log item
 }
 
-const InventoryItemComponent: React.FC<InventoryItemProps> = ({ item, onEdit, onDelete, isSelected, onSelect, editMode }) => {
+const InventoryItemComponent: React.FC<InventoryItemProps> = ({ item, onEdit, onDelete, isSelected, onSelect, editMode, onViewItemLog }) => {
   // State for barcode modal
   const [showBarcode, setShowBarcode] = React.useState(false);
   const [useQRCode, setUseQRCode] = React.useState(true); // Switch between QR code and barcode
@@ -54,12 +55,16 @@ const InventoryItemComponent: React.FC<InventoryItemProps> = ({ item, onEdit, on
           {
             text: 'View Logs',
             onPress: () => {
-              // This would be implemented with actual log data in a real app
-              Alert.alert(
-                'Product Logs',
-                'Stock Opname Logs:\n- No logs yet\n\nSales Logs:\n- No logs yet\n\nLast Updated: ' + item.updatedAt.toLocaleString(),
-                [{ text: 'OK' }]
-              );
+              // Navigate to item log screen
+              if (onViewItemLog) {
+                onViewItemLog(item);
+              } else {
+                Alert.alert(
+                  'View Logs',
+                  'In a complete implementation, this would navigate to the item log screen.',
+                  [{ text: 'OK' }]
+                );
+              }
             }
           },
           {

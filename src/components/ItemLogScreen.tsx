@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchInventoryTransactions } from '../services/InventoryService';
 import { getAllSOHistory } from '../services/SOHistoryService';
@@ -40,7 +40,7 @@ interface ItemLogScreenProps {
 
 const ItemLogScreen: React.FC<ItemLogScreenProps> = ({ itemCode, itemName, onBack }) => {
   const [groupedData, setGroupedData] = useState<GroupedTransactions>({});
-  const [loading, setLoading] = true;
+  const [loading, setLoading] = useState(true);
 
   const loadLogs = async () => {
     try {
@@ -180,8 +180,13 @@ const ItemLogScreen: React.FC<ItemLogScreenProps> = ({ itemCode, itemName, onBac
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Log Item: {itemName}</Text>
-        <Text style={styles.code}>Code: {itemCode}</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{itemName}</Text>
+          <Text style={styles.code}>{itemCode}</Text>
+        </View>
+        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+          <Text style={styles.backButtonText}>Kembali</Text>
+        </TouchableOpacity>
       </View>
       
       <ScrollView style={styles.content}>
@@ -273,6 +278,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 20,
     backgroundColor: '#fff',
     elevation: 2,
@@ -280,6 +288,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+  },
+  backButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  headerContent: {
+    flex: 1,
   },
   title: {
     fontSize: 20,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, BackHandler, Alert } from 'react-native';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import LoginPanel from './src/components/LoginPanel';
@@ -14,6 +14,7 @@ import SOHistoryScreen from './src/components/SOHistoryScreen';
 import MonitoringItemsScreen from './src/components/MonitoringItemsScreen';
 import ItemLogScreen from './src/components/ItemLogScreen';
 import { User } from './src/models/User';
+import { getSOHistoryById } from './src/services/SOHistoryService'; // Import the new function
 
 // Main app component wrapped with AuthProvider
 export default function App() {
@@ -31,6 +32,9 @@ const AppContent: React.FC = () => {
   const [soItems, setSoItems] = useState<any[]>([]); // State to hold SO items data
   const [soReportData, setSoReportData] = useState<any>(null); // State to hold SO report data
   const [itemLogData, setItemLogData] = useState<{code: string, name: string} | null>(null); // State to hold item log data
+  const [itemLogSource, setItemLogSource] = useState<'inventory' | 'soReport' | null>(null); // State to track where item log was opened from
+  const stockOpnameRef = useRef<{ handleHardwareBackPress: () => void }>(null);
+  const editSORef = useRef<{ handleHardwareBackPress: () => void }>(null);
 
   // Handle hardware back button
   useEffect(() => {
@@ -47,6 +51,28 @@ const AppContent: React.FC = () => {
         );
         return true; // Prevent default behavior
       } 
+      // If we're in StockOpname view, delegate to the component
+      else if (currentView === 'stockOpname') {
+        // Call the StockOpname component's hardware back button handler
+        if (stockOpnameRef.current && stockOpnameRef.current.handleHardwareBackPress) {
+          stockOpnameRef.current.handleHardwareBackPress();
+        } else {
+          // Fallback to default behavior if ref is not available
+          setCurrentView('home');
+        }
+        return true; // Prevent default behavior
+      }
+      // If we're in EditSO view, delegate to the component
+      else if (currentView === 'editSO') {
+        // Call the EditSO component's hardware back button handler
+        if (editSORef.current && editSORef.current.handleHardwareBackPress) {
+          editSORef.current.handleHardwareBackPress();
+        } else {
+          // Fallback to default behavior if ref is not available
+          setCurrentView('home');
+        }
+        return true; // Prevent default behavior
+      }
       // If we're in other views, go back to home
       else {
         setCurrentView('home');
@@ -96,13 +122,21 @@ const AppContent: React.FC = () => {
         />
       )}
       {currentView === 'inventory' && (
-        <InventoryScreen onBack={() => handleNavigate('home')} />
+        <InventoryScreen 
+          onBack={() => handleNavigate('home')} 
+          onNavigateToItemLog={(itemCode, itemName) => {
+            setItemLogData({code: itemCode, name: itemName});
+            setItemLogSource('inventory');
+            handleNavigate('itemLog');
+          }}
+        />
       )}
       {currentView === 'admin' && currentUser?.role === 'admin' && (
         <AdminDashboard onBack={() => handleNavigate('home')} />
       )}
       {currentView === 'stockOpname' && (
         <StockOpname 
+          ref={stockOpnameRef}
           onBack={() => handleNavigate('home')} 
           onNavigate={handleNavigate}
         />
@@ -121,24 +155,55 @@ const AppContent: React.FC = () => {
       )}
       {currentView === 'editSO' && (
         <EditSO 
+          ref={editSORef}
           onBack={(reportData) => {
             setSoReportData(reportData);
-            handleNavigate('soReport');
-          }} 
-          items={soItems} 
+            setCurrentView('soReport');
+          }}
+          items={soItems}
           currentUser={currentUser}
         />
       )}
       {currentView === 'soReport' && (
         <SOReportScreen 
           onBack={() => handleNavigate('soHistory')} 
+          onNavigateToDashboard={() => handleNavigate('home')}
           reportData={soReportData}
+          onNavigateToItemLog={(itemCode, itemName) => {
+            setItemLogData({code: itemCode, name: itemName});
+            setItemLogSource('soReport');
+            handleNavigate('itemLog');
+          }}
         />
       )}
       {currentView === 'soHistory' && (
         <SOHistoryScreen 
           onBack={() => handleNavigate('home')} 
-          onViewReport={() => handleNavigate('soReport')}
+          onViewReport={async (reportId) => {
+            try {
+              // Fetch the specific report data by ID
+              const reportData = await getSOHistoryById(reportId);
+              if (reportData) {
+                // Convert the items from JSON string to object
+                const items = JSON.parse(reportData.items);
+                setSoReportData({
+                  id: reportData.id,
+                  totalItems: reportData.totalItems,
+                  totalQtyDifference: reportData.totalDifference,
+                  totalRpDifference: reportData.totalRpDifference,
+                  soDuration: `${Math.floor(reportData.duration / 60)} menit ${reportData.duration % 60} detik`,
+                  soUser: reportData.userName,
+                  soDate: reportData.date,
+                  items: items,
+                  // Other fields would need to be populated from the database
+                });
+              }
+              handleNavigate('soReport');
+            } catch (error) {
+              console.error('Error fetching report data:', error);
+              Alert.alert('Error', 'Failed to load report data');
+            }
+          }}
         />
       )}
       {currentView === 'monitoring' && (
@@ -150,7 +215,13 @@ const AppContent: React.FC = () => {
         <ItemLogScreen 
           itemCode={itemLogData.code}
           itemName={itemLogData.name}
-          onBack={() => handleNavigate('inventory')}
+          onBack={() => {
+            if (itemLogSource === 'soReport') {
+              handleNavigate('soReport');
+            } else {
+              handleNavigate('inventory');
+            }
+          }}
         />
       )}
     </View>

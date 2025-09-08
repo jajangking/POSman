@@ -118,3 +118,8 @@ This is a demonstration system. For production use, the following security impro
 3. Add input validation and sanitization
 4. Implement rate limiting for login attempts
 5. Use secure communication protocols
+
+## Aturan Khusus untuk Interaksi
+
+- **Dilarang menjalankan proyek**: Tidak boleh menggunakan perintah apa pun yang berpotensi memulai atau menjalankan aplikasi (seperti `npm start`, `npm run android`, dll.).
+- **Tidak ada ringkasan**: Tidak boleh memberikan ringkasan perubahan atau penjelasan tambahan setelah melakukan modifikasi kode, kecuali diminta secara eksplisit.

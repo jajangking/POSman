@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, FlatList, Alert, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchInventoryItemByCode, modifyInventoryItem } from '../services/InventoryService';
+import { deleteSOSession } from '../services/DatabaseService';
 import { createSOHistory } from '../services/SOHistoryService';
 
 // Define the SOItem interface to match the PartialSO component
@@ -23,7 +24,7 @@ interface EditSOProps {
   currentUser?: any;
 }
 
-const EditSO: React.FC<EditSOProps> = ({ onBack, items = [], currentUser }) => {
+const EditSO = React.forwardRef(({ onBack, items = [], currentUser }: EditSOProps, ref) => {
   const [soItems, setSoItems] = useState<SOItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -245,7 +246,7 @@ Total item dengan selisih: ${mismatchedItems.length}`,
     return sortItemsByCategory(soItems);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Show confirmation dialog before completing SO
     Alert.alert(
       'Konfirmasi Selesai SO',
@@ -325,33 +326,10 @@ Total item dengan selisih: ${mismatchedItems.length}`,
               const totalDatabaseItems = soItems.length + 5; // Mock value
               const percentageSO = Math.round((soItems.length / totalDatabaseItems) * 100);
               
-              const reportData = {
-                totalItems: soItems.length,
-                totalQtyDifference,
-                totalRpDifference,
-                soDuration: durationText,
-                soUser: currentUser?.username || 'Unknown User',
-                soDate: new Date().toISOString(),
-                largestMinusItem,
-                largestPlusItem,
-                consecutiveMinusItems,
-                consecutivePlusItems,
-                items: soItems.map(item => ({
-                  name: item.name,
-                  code: item.code,
-                  systemQty: item.systemQuantity,
-                  physicalQty: item.soQuantity,
-                  difference: getDifference(item),
-                  price: item.price,
-                  total: getTotalRupiah(item)
-                })),
-                percentageSO: `${percentageSO}%`,
-                totalDatabaseItems
-              };
-              
               // Save SO history to database
+              let soHistoryId = null;
               try {
-                await createSOHistory({
+                const soHistory = await createSOHistory({
                   date: new Date().toISOString(),
                   userId: currentUser?.id || 'unknown',
                   userName: currentUser?.username || 'Unknown User',
@@ -369,13 +347,57 @@ Total item dengan selisih: ${mismatchedItems.length}`,
                     total: getTotalRupiah(item)
                   })))
                 });
+                
+                // Simpan ID riwayat SO
+                soHistoryId = soHistory.id;
+                console.log('SO History ID:', soHistoryId);
               } catch (error) {
                 console.error('Error saving SO history:', error);
+                Alert.alert(
+                  'Error',
+                  'Terjadi kesalahan saat menyimpan riwayat SO: ' + (error.message || 'Unknown error')
+                );
                 // Don't block the main flow if history saving fails
               }
               
+              const reportData = {
+                id: soHistoryId, // Tambahkan ID riwayat SO
+                totalItems: soItems.length,
+                totalQtyDifference,
+                totalRpDifference,
+                soDuration: durationText,
+                soUser: currentUser?.username || 'Unknown User',
+                soDate: new Date().toISOString(),
+                largestMinusItem,
+                largestPlusItem,
+                consecutiveMinusItems,
+                consecutivePlusItems,
+                items: soItems.map(item => ({
+                  code: item.code,
+                  name: item.name,
+                  systemQty: item.systemQuantity,
+                  physicalQty: item.soQuantity,
+                  difference: getDifference(item),
+                  price: item.price,
+                  total: getTotalRupiah(item)
+                })),
+                percentageSO: `${percentageSO}%`,
+                totalDatabaseItems
+              };
+              
               // Navigate to report screen with report data
               onBack && onBack(reportData);
+              
+              // Clear the SO session since the process is complete
+              try {
+                await deleteSOSession();
+              } catch (error) {
+                console.error('Error clearing SO session:', error);
+                Alert.alert(
+                  'Error',
+                  'Terjadi kesalahan saat menghapus sesi SO: ' + (error.message || 'Unknown error')
+                );
+              }
             } catch (error) {
               console.error('Error saving SO data:', error);
               Alert.alert(
@@ -439,6 +461,33 @@ Total item dengan selisih: ${mismatchedItems.length}`,
       </View>
     );
   };
+
+  // Expose method for hardware back button handling
+  React.useImperativeHandle(ref, () => ({
+    handleHardwareBackPress: () => {
+      // Show confirmation dialog when hardware back button is pressed
+      Alert.alert(
+        'Konfirmasi Kembali',
+        'Anda sedang dalam proses Edit SO. Apakah Anda yakin ingin kembali? Data yang belum disimpan akan hilang.',
+        [
+          {
+            text: 'Batal',
+            style: 'cancel'
+          },
+          {
+            text: 'Kembali',
+            style: 'destructive',
+            onPress: () => {
+              // Navigate back to home
+              if (onBack) {
+                onBack(null); // Pass null since we're not completing the SO
+              }
+            }
+          }
+        ]
+      );
+    }
+  }));
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -546,7 +595,7 @@ Total item dengan selisih: ${mismatchedItems.length}`,
       </View>
     </SafeAreaView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -755,4 +804,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default EditSO;
+export default React.memo(EditSO);

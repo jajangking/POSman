@@ -8,9 +8,10 @@ import { InventoryItem } from '../models/Inventory';
 
 interface InventoryScreenProps {
   onBack?: () => void;
+  onNavigateToItemLog?: (itemCode: string, itemName: string) => void;
 }
 
-const InventoryScreen: React.FC<InventoryScreenProps> = ({ onBack }) => {
+const InventoryScreen: React.FC<InventoryScreenProps> = ({ onBack, onNavigateToItemLog }) => {
   const [view, setView] = useState<'list' | 'form' | 'log'>('list');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | undefined>(undefined);
 
@@ -25,8 +26,14 @@ const InventoryScreen: React.FC<InventoryScreenProps> = ({ onBack }) => {
   };
 
   const handleViewItemLog = (item: InventoryItem) => {
-    setSelectedItem(item);
-    setView('log');
+    // If onNavigateToItemLog is provided, use it to navigate to the global ItemLogScreen
+    if (onNavigateToItemLog) {
+      onNavigateToItemLog(item.code, item.name);
+    } else {
+      // Otherwise, use the internal navigation
+      setSelectedItem(item);
+      setView('log');
+    }
   };
 
   const handleSave = () => {

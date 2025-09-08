@@ -6,12 +6,30 @@ import { getAllSOHistory } from '../services/SOHistoryService';
 
 interface SOReportScreenProps {
   onBack?: () => void;
+  onNavigateToDashboard?: () => void;
   reportData?: any;
+  onNavigateToItemLog?: (itemCode: string, itemName: string) => void;
 }
 
-const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, reportData }) => {
+const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, onNavigateToDashboard, reportData, onNavigateToItemLog = () => {} }) => {
   // Use real data if provided, otherwise use mock data
-  const data = reportData || {
+  const data = reportData ? {
+    ...reportData,
+    // Provide default values for missing fields
+    totalItems: reportData.totalItems || 0,
+    totalQtyDifference: reportData.totalQtyDifference || reportData.totalDifference || 0,
+    totalRpDifference: reportData.totalRpDifference || 0,
+    soDuration: reportData.soDuration || '0 menit 0 detik',
+    soUser: reportData.soUser || reportData.userName || 'Unknown User',
+    soDate: reportData.soDate || reportData.date || new Date().toISOString(),
+    largestMinusItem: reportData.largestMinusItem || null,
+    largestPlusItem: reportData.largestPlusItem || null,
+    consecutiveMinusItems: reportData.consecutiveMinusItems || [],
+    consecutivePlusItems: reportData.consecutivePlusItems || [],
+    items: reportData.items || [],
+    percentageSO: reportData.percentageSO || '0%',
+    totalDatabaseItems: reportData.totalDatabaseItems || 0
+  } : {
     totalItems: 0,
     totalQtyDifference: 0,
     totalRpDifference: 0,
@@ -48,18 +66,22 @@ const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, reportData }) =
         // Load item analysis (only for items in current SO)
         const analysis = await analyzeItems(data.items);
         setItemAnalysis(analysis);
+        console.log('Item analysis loaded:', analysis);
         
         // Load items for monitoring (only for items in current SO)
         const monitoring = await getItemsForMonitoring(data.items);
         setItemsForMonitoring(monitoring);
+        console.log('Items for monitoring loaded:', monitoring);
         
         // Load consecutive SO items (only for items in current SO)
         const consecutiveItems = await getConsecutiveSOItems(data.items);
         setConsecutiveSOItems(consecutiveItems);
+        console.log('Consecutive SO items loaded:', consecutiveItems);
         
         // Load SO statistics
         try {
           const history = await getAllSOHistory();
+          console.log('SO history loaded:', history);
           const totalSO = history.length;
           const avgItemsPerSO = totalSO > 0 
             ? Math.round(history.reduce((sum, so) => sum + so.totalItems, 0) / totalSO)
@@ -73,6 +95,7 @@ const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, reportData }) =
           
           // Get total items in database for percentage calculation
           const totalDatabaseItems = await getTotalItemsInDatabase();
+          console.log('Total database items:', totalDatabaseItems);
           const percentageSO = totalDatabaseItems > 0 
             ? `${Math.round((data.items.length / totalDatabaseItems) * 100)}%`
             : '0%';
@@ -84,6 +107,7 @@ const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, reportData }) =
             totalDatabaseItems,
             percentageSO
           });
+          console.log('SO statistics loaded:', { totalSO, avgItemsPerSO, avgDuration, totalDatabaseItems, percentageSO });
         } catch (error) {
           console.error('Error loading SO statistics:', error);
         }
@@ -117,9 +141,6 @@ const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, reportData }) =
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Laporan Stock Opname</Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onBack}>
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
         </View>
         
         <ScrollView style={styles.content}>
@@ -133,7 +154,141 @@ const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, reportData }) =
             </View>
             
             <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Detail Item</Text>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableHeaderText, styles.noColumn]}>No</Text>
+                <Text style={[styles.tableHeaderText, styles.itemColumn]}>Item</Text>
+                <Text style={[styles.tableHeaderText, styles.qtyColumn]}>Sistem</Text>
+                <Text style={[styles.tableHeaderText, styles.qtyColumn]}>Fisik</Text>
+                <Text style={[styles.tableHeaderText, styles.qtyColumn]}>Selisih</Text>
+                <Text style={[styles.tableHeaderText, styles.totalColumn]}>Total</Text>
+              </View>
+              
+              {data.items && data.items.length > 0 ? (
+                data.items.map((item: any, index: number) => (
+                  <View key={index} style={styles.tableRow}>
+                    <Text style={[styles.tableCellText, styles.noColumn]}>{index + 1}</Text>
+                    <View style={[styles.itemColumn, styles.itemContainer]}>
+                      <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.itemCode} numberOfLines={1}>{item.code}</Text>
+                    </View>
+                    <Text style={[styles.tableCellText, styles.qtyColumn]}>{item.systemQty}</Text>
+                    <Text style={[styles.tableCellText, styles.qtyColumn]}>{item.physicalQty}</Text>
+                    <Text style={[styles.tableCellText, styles.qtyColumn, item.difference < 0 ? styles.minusText : item.difference > 0 ? styles.plusText : null]}>
+                      {item.difference > 0 ? `+${item.difference}` : item.difference}
+                    </Text>
+                    <Text style={[styles.tableCellText, styles.totalColumn]}>
+                      {item.total > 0 ? 
+                        `+Rp ${Math.abs(item.total).toLocaleString('id-ID')}` : 
+                        item.total < 0 ? 
+                        `-Rp ${Math.abs(item.total).toLocaleString('id-ID')}` : 
+                        `Rp ${Math.abs(item.total).toLocaleString('id-ID')}`}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>Detail item akan ditampilkan di sini</Text>
+              )}
+            </View>
+            
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Barang dengan SO Minus Berulang</Text>
+              <Text style={styles.sectionDescription}>Jumlah item: {consecutiveSOItems.minusItems.length}</Text>
+              {consecutiveSOItems.minusItems.length > 0 ? (
+                consecutiveSOItems.minusItems.map((item: any, index: number) => (
+                  <View key={index} style={styles.summaryRow}>
+                    <Text style={styles.summaryValue}>
+                      {item.name} ({item.code})
+                    </Text>
+                    <Text style={[styles.summaryValue, styles.minusText]}>
+                      {item.consecutiveCount} kali berturut-turut
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>Tidak ada item dengan SO minus berulang</Text>
+              )}
+            </View>
+            
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Barang dengan SO Plus Berulang</Text>
+              <Text style={styles.sectionDescription}>Jumlah item: {consecutiveSOItems.plusItems.length}</Text>
+              {consecutiveSOItems.plusItems.length > 0 ? (
+                consecutiveSOItems.plusItems.map((item: any, index: number) => (
+                  <View key={index} style={styles.summaryRow}>
+                    <Text style={styles.summaryValue}>
+                      {item.name} ({item.code})
+                    </Text>
+                    <Text style={[styles.summaryValue, styles.plusText]}>
+                      {item.consecutiveCount} kali berturut-turut
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>Tidak ada item dengan SO plus berulang</Text>
+              )}
+            </View>
+            
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Analisis Per Item</Text>
+              <Text style={styles.sectionDescription}>Jumlah item yang dianalisis: {itemAnalysis.length}</Text>
+              {itemAnalysis.length > 0 ? (
+                itemAnalysis.map((item, index) => (
+                  <View key={index} style={styles.analysisItem}>
+                    <Text style={styles.analysisItemName}>{item.name} ({item.code})</Text>
+                    <Text style={styles.analysisItemStatus}>{item.status}</Text>
+                    <Text style={styles.analysisItemHistory}>{item.history}</Text>
+                    <Text style={styles.analysisItemRecommendation}>{item.recommendation}</Text>
+                    <Text style={styles.detailText}>Tren Terkini: {item.recentTrend}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>Tidak ada analisis item</Text>
+              )}
+            </View>
+            
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Pemantauan Barang</Text>
+              <Text style={styles.sectionDescription}>Jumlah item untuk pemantauan: {itemsForMonitoring.length}</Text>
+              <Text style={styles.sectionDescription}>
+                Berdasarkan analisis di atas, berikut rekomendasi pemantauan untuk barang yang memerlukan perhatian:
+              </Text>
+              {itemsForMonitoring.map((item, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={styles.monitoringItem}
+                  onPress={() => {
+                    try {
+                      onNavigateToItemLog(item.code, item.name);
+                    } catch (error) {
+                      console.warn('Failed to navigate to item log:', error);
+                    }
+                  }}
+                >
+                  <Text style={styles.monitoringItemName}>{item.name} ({item.code})</Text>
+                  <Text style={styles.monitoringItemStatus}>{item.status}</Text>
+                  <Text style={styles.monitoringItemRecommendation}>{item.recommendation}</Text>
+                </TouchableOpacity>
+              ))}
+              {itemsForMonitoring.length === 0 && (
+                <Text style={styles.sectionDescription}>
+                  Tidak ada barang yang memerlukan pemantauan khusus saat ini.
+                </Text>
+              )}
+              <Text style={styles.sectionDescription}>
+                Disarankan untuk:
+              </Text>
+              <Text style={styles.listText}>• Meningkatkan pengawasan terhadap barang yang sering minus</Text>
+              <Text style={styles.listText}>• Memeriksa prosedur penyimpanan dan pengeluaran untuk barang bermasalah</Text>
+              <Text style={styles.listText}>• Melakukan pelatihan ulang kepada staf yang menangani barang bermasalah</Text>
+            </View>
+            
+            <View style={styles.section}>
               <Text style={styles.sectionTitle}>Informasi SO</Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>ID SO:</Text>
+                <Text style={styles.summaryValue}>{data.id || 'N/A'}</Text>
+              </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Tanggal SO:</Text>
                 <Text style={styles.summaryValue}>{new Date(data.soDate).toLocaleString('id-ID')}</Text>
@@ -206,70 +361,6 @@ const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, reportData }) =
             )}
             
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Barang dengan SO Minus Berulang</Text>
-              {consecutiveSOItems.minusItems.length > 0 ? (
-                consecutiveSOItems.minusItems.map((item: any, index: number) => (
-                  <View key={index} style={styles.summaryRow}>
-                    <Text style={styles.summaryValue}>
-                      {item.name} ({item.code})
-                    </Text>
-                    <Text style={[styles.summaryValue, styles.minusText]}>
-                      {item.consecutiveCount} kali berturut-turut
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>Tidak ada item dengan SO minus berulang</Text>
-              )}
-            </View>
-            
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Barang dengan SO Plus Berulang</Text>
-              {consecutiveSOItems.plusItems.length > 0 ? (
-                consecutiveSOItems.plusItems.map((item: any, index: number) => (
-                  <View key={index} style={styles.summaryRow}>
-                    <Text style={styles.summaryValue}>
-                      {item.name} ({item.code})
-                    </Text>
-                    <Text style={[styles.summaryValue, styles.plusText]}>
-                      {item.consecutiveCount} kali berturut-turut
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>Tidak ada item dengan SO plus berulang</Text>
-              )}
-            </View>
-            
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Pemantauan Barang</Text>
-              <Text style={styles.sectionDescription}>
-                Berdasarkan analisis di atas, berikut rekomendasi pemantauan untuk barang yang memerlukan perhatian:
-              </Text>
-              {itemsForMonitoring.map((item, index) => (
-                <View 
-                  key={index} 
-                  style={styles.monitoringItem}
-                >
-                  <Text style={styles.monitoringItemName}>{item.name} ({item.code})</Text>
-                  <Text style={styles.monitoringItemStatus}>{item.status}</Text>
-                  <Text style={styles.monitoringItemRecommendation}>{item.recommendation}</Text>
-                </View>
-              ))}
-              {itemsForMonitoring.length === 0 && (
-                <Text style={styles.sectionDescription}>
-                  Tidak ada barang yang memerlukan pemantauan khusus saat ini.
-                </Text>
-              )}
-              <Text style={styles.sectionDescription}>
-                Disarankan untuk:
-              </Text>
-              <Text style={styles.listText}>• Meningkatkan pengawasan terhadap barang yang sering minus</Text>
-              <Text style={styles.listText}>• Memeriksa prosedur penyimpanan dan pengeluaran untuk barang bermasalah</Text>
-              <Text style={styles.listText}>• Melakukan pelatihan ulang kepada staf yang menangani barang bermasalah</Text>
-            </View>
-            
-            <View style={styles.section}>
               <Text style={styles.sectionTitle}>Statistik SO</Text>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Total SO:</Text>
@@ -291,54 +382,24 @@ const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, reportData }) =
                 Dari total {data.totalItems} item yang di SO, sebanyak {soStatistics.percentageSO} dari total barang dalam database telah diperiksa.
               </Text>
             </View>
-            
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Detail Item</Text>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeaderText, styles.noColumn]}>No</Text>
-                <Text style={[styles.tableHeaderText, styles.itemColumn]}>Item</Text>
-                <Text style={[styles.tableHeaderText, styles.qtyColumn]}>Sistem</Text>
-                <Text style={[styles.tableHeaderText, styles.qtyColumn]}>Fisik</Text>
-                <Text style={[styles.tableHeaderText, styles.qtyColumn]}>Selisih</Text>
-                <Text style={[styles.tableHeaderText, styles.totalColumn]}>Total</Text>
-              </View>
-              
-              {data.items && data.items.length > 0 ? (
-                data.items.map((item: any, index: number) => (
-                  <View key={index} style={styles.tableRow}>
-                    <Text style={[styles.tableCellText, styles.noColumn]}>{index + 1}</Text>
-                    <View style={[styles.itemColumn, styles.itemContainer]}>
-                      <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                      <Text style={styles.itemCode} numberOfLines={1}>{item.code}</Text>
-                    </View>
-                    <Text style={[styles.tableCellText, styles.qtyColumn]}>{item.systemQty}</Text>
-                    <Text style={[styles.tableCellText, styles.qtyColumn]}>{item.physicalQty}</Text>
-                    <Text style={[styles.tableCellText, styles.qtyColumn, item.difference < 0 ? styles.minusText : item.difference > 0 ? styles.plusText : null]}>
-                      {item.difference > 0 ? `+${item.difference}` : item.difference}
-                    </Text>
-                    <Text style={[styles.tableCellText, styles.totalColumn]}>
-                      {item.total > 0 ? 
-                        `+Rp ${Math.abs(item.total).toLocaleString('id-ID')}` : 
-                        item.total < 0 ? 
-                        `-Rp ${Math.abs(item.total).toLocaleString('id-ID')}` : 
-                        `Rp ${Math.abs(item.total).toLocaleString('id-ID')}`}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>Detail item akan ditampilkan di sini</Text>
-              )}
-            </View>
           </View>
         </ScrollView>
         
         <View style={styles.bottomButtonContainer}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={onBack}
-          >
-            <Text style={styles.backButtonText}>Riwayat SO</Text>
-          </TouchableOpacity>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity 
+              style={[styles.backButton, styles.historyButton]} 
+              onPress={onBack}
+            >
+              <Text style={styles.backButtonText}>History SO</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.backButton, styles.finishButton]} 
+              onPress={onNavigateToDashboard || onBack}
+            >
+              <Text style={styles.backButtonText}>Selesai</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -369,13 +430,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-  },
-  closeButton: {
-    padding: 5,
-  },
-  closeButtonText: {
-    fontSize: 20,
-    color: '#666',
   },
   content: {
     flex: 1,
@@ -574,6 +628,11 @@ const styles = StyleSheet.create({
     paddingBottom: 35,
     paddingTop: 10,
   },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
   backButton: {
     backgroundColor: '#007AFF',
     justifyContent: 'center',
@@ -586,6 +645,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  historyButton: {
+    backgroundColor: '#007AFF',
+  },
+  finishButton: {
+    backgroundColor: '#34C759',
   },
   backButtonText: {
     color: 'white',

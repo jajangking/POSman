@@ -1,15 +1,109 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getCurrentSOSession, upsertSOSession, deleteSOSession } from '../services/DatabaseService';
 
 interface StockOpnameProps {
   onBack?: () => void;
   onNavigate?: (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO') => void;
 }
 
-const StockOpname: React.FC<StockOpnameProps> = ({ onBack, onNavigate }) => {
+// Define session storage key
+const SO_SESSION_STORAGE_KEY = 'stock_opname_session';
+const SO_ITEMS_STORAGE_KEY = 'stock_opname_items';
+
+// Define session data interface
+interface SOSessionData {
+  type: 'partial' | 'grand';
+  startTime: string; // ISO string
+  lastView: 'partialSO' | 'grandSO' | 'editSO';
+}
+
+const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, ref) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSOType, setSelectedSOType] = useState<'partial' | 'grand' | null>(null);
+  const [savedSession, setSavedSession] = useState<SOSessionData | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+  const [hasActiveSession, setHasActiveSession] = useState(false);
+  
+  // Load saved session on component mount
+  useEffect(() => {
+    const loadSavedSession = async () => {
+      try {
+        const sessionData = await getCurrentSOSession();
+        console.log('Loading session data from database:', sessionData);
+        if (sessionData) {
+          const parsedSession: SOSessionData = {
+            type: sessionData.type,
+            startTime: sessionData.startTime,
+            lastView: sessionData.lastView
+          };
+          setSavedSession(parsedSession);
+          setHasActiveSession(true);
+          console.log('Session loaded successfully:', parsedSession);
+        } else {
+          console.log('No session data found in database');
+        }
+      } catch (error) {
+        console.error('Error loading SO session:', error);
+      } finally {
+        setIsLoadingSession(false);
+      }
+    };
+    
+    loadSavedSession();
+  }, []);
+  
+  // Handle back button press with confirmation for active sessions
+  const handleBackPress = () => {
+    // If there's an active session, show confirmation dialog
+    if (hasActiveSession || selectedSOType) {
+      Alert.alert(
+        'Minimalkan Sesi Stock Opname',
+        'Anda memiliki sesi Stock Opname yang sedang berjalan. Apakah Anda ingin meminimalkan sesi ini untuk dilanjutkan nanti?',
+        [
+          {
+            text: 'Keluar dan Hapus',
+            onPress: async () => {
+              // Clear the session and go back
+              try {
+                await deleteSOSession();
+              } catch (error) {
+                console.error('Error clearing SO session:', error);
+              }
+              onBack && onBack();
+            },
+            style: 'destructive',
+          },
+          {
+            text: 'Minimalkan',
+            onPress: async () => {
+              // If we have a selected SO type but no saved session yet, save it
+              if (selectedSOType && !savedSession) {
+                const sessionData = {
+                  type: selectedSOType,
+                  startTime: new Date().toISOString(),
+                  lastView: selectedSOType === 'partial' ? 'partialSO' : 'grandSO',
+                  items: ''
+                };
+                
+                try {
+                  await upsertSOSession(sessionData);
+                } catch (error) {
+                  console.error('Error saving SO session:', error);
+                }
+              }
+              // Go back but keep the session
+              onBack && onBack();
+            },
+          },
+        ]
+      );
+    } else {
+      // No active session, just go back normally
+      onBack && onBack();
+    }
+  };
   
   // Update time every second
   React.useEffect(() => {
@@ -37,19 +131,71 @@ const StockOpname: React.FC<StockOpnameProps> = ({ onBack, onNavigate }) => {
     });
   };
 
-  const handleStartSO = () => {
-    if (selectedSOType === 'partial' && onNavigate) {
-      onNavigate('partialSO');
-    } else if (selectedSOType === 'grand' && onNavigate) {
-      onNavigate('grandSO');
+  const handleContinueSession = async () => {
+    if (savedSession && onNavigate) {
+      try {
+        // Set active session flag
+        setHasActiveSession(true);
+        // Navigate to the last view in the session
+        onNavigate(savedSession.lastView);
+      } catch (error) {
+        console.error('Error continuing SO session:', error);
+      }
     }
   };
+  
+  const handleStartSO = async () => {
+    if (selectedSOType && onNavigate) {
+      // Clear any existing session data first
+      try {
+        await deleteSOSession();
+      } catch (error) {
+        console.error('Error clearing previous SO session:', error);
+      }
+      
+      // Save new session data
+      const sessionData = {
+        type: selectedSOType,
+        startTime: new Date().toISOString(),
+        lastView: selectedSOType === 'partial' ? 'partialSO' : 'grandSO',
+        items: ''
+      };
+      
+      try {
+        console.log('Saving session data to database:', sessionData);
+        await upsertSOSession(sessionData);
+        setHasActiveSession(true);
+        console.log('Session saved successfully');
+      } catch (error) {
+        console.error('Error saving SO session:', error);
+      }
+      
+      // Navigate to the appropriate view
+      if (selectedSOType === 'partial') {
+        onNavigate('partialSO');
+      } else if (selectedSOType === 'grand') {
+        onNavigate('grandSO');
+      }
+    }
+  };
+
+  // Expose method for hardware back button handling
+  React.useImperativeHandle(ref, () => ({
+    handleHardwareBackPress: () => {
+      // This will be called when hardware back button is pressed
+      handleBackPress();
+    }
+  }));
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
         <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
           <Text style={styles.title}>Stock Opname</Text>
+          <View style={styles.placeholder} />
         </View>
         
         <View style={styles.content}>
@@ -98,26 +244,57 @@ const StockOpname: React.FC<StockOpnameProps> = ({ onBack, onNavigate }) => {
           
           {/* Action Buttons */}
           <View style={styles.actionContainer}>
-            <TouchableOpacity 
-              style={[styles.actionButton, !selectedSOType && styles.disabledButton]}
-              onPress={handleStartSO}
-              disabled={!selectedSOType}
-            >
-              <Text style={styles.actionButtonText}>Start SO</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.editButton]}
-              onPress={() => onNavigate && onNavigate('editSO')}
-            >
-              <Text style={styles.editButtonText}>Edit SO</Text>
-            </TouchableOpacity>
+            {isLoadingSession ? (
+              <Text style={styles.loadingText}>Memuat sesi...</Text>
+            ) : savedSession ? (
+              <>
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.continueButton]}
+                  onPress={handleContinueSession}
+                >
+                  <Text style={styles.actionButtonText}>Lanjutkan SO</Text>
+                </TouchableOpacity>
+                <Text style={styles.sessionInfo}>
+                  Lanjutkan SO {savedSession.type === 'partial' ? 'Partial' : 'Grand'} yang tersimpan
+                </Text>
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.newSOButton]}
+                  onPress={async () => {
+                    try {
+                      await deleteSOSession();
+                      setSavedSession(null);
+                      setHasActiveSession(false);
+                    } catch (error) {
+                      console.error('Error clearing SO session:', error);
+                    }
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>SO Baru</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity 
+                  style={[styles.actionButton, !selectedSOType && styles.disabledButton]}
+                  onPress={handleStartSO}
+                  disabled={!selectedSOType}
+                >
+                  <Text style={styles.actionButtonText}>Start SO</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.editButton]}
+                  onPress={() => onNavigate && onNavigate('editSO')}
+                >
+                  <Text style={styles.editButtonText}>Edit SO</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </View>
     </SafeAreaView>
   );
-};
+});
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -129,7 +306,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 15,
     backgroundColor: 'white',
@@ -138,6 +315,18 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
+  },
+  backButton: {
+    padding: 5,
+    minWidth: 40,
+    alignItems: 'flex-start',
+  },
+  backButtonText: {
+    fontSize: 20,
+    color: '#007AFF',
+  },
+  placeholder: {
+    minWidth: 40, // Same width as back button to center the title
   },
   title: {
     fontSize: 20,
@@ -223,6 +412,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
   },
+  continueButton: {
+    backgroundColor: '#34C759',
+  },
+  newSOButton: {
+    backgroundColor: '#FF9500',
+    marginTop: 10,
+  },
   editButton: {
     backgroundColor: '#007AFF',
     paddingVertical: 15,
@@ -244,6 +440,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  sessionInfo: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 15,
+    fontStyle: 'italic',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
 });
 
-export default StockOpname;
+export default React.memo(StockOpname);

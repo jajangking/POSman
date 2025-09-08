@@ -385,6 +385,7 @@ export const getConsecutiveSOItems = async (currentSoItems: any[]): Promise<{min
 export const getTotalItemsInDatabase = async (): Promise<number> => {
   try {
     const items = await getAllInventoryItems();
+    console.log('Inventory items loaded for analysis:', items.length);
     return items.length;
   } catch (error) {
     console.error('Error getting total items in database:', error);

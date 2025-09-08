@@ -4,7 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ScannerModal from './ScannerModal';
 import ItemListModal from './ItemListModal';
 import { fetchInventoryItemByCode, fetchAllInventoryItems } from '../services/InventoryService';
+import { getCurrentSOSession, updateSOSessionItems, deleteSOSession } from '../services/DatabaseService';
 import { InventoryItem } from '../models/Inventory';
+
+// Define session storage keys
+const SO_SESSION_STORAGE_KEY = 'stock_opname_session';
+const SO_ITEMS_STORAGE_KEY = 'stock_opname_items';
 
 interface PartialSOProps {
   onBack?: () => void;
@@ -34,6 +39,60 @@ const PartialSO: React.FC<PartialSOProps> = ({ onBack, onNavigateToEditSO }) => 
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const bottomButtonContainerRef = useRef<View>(null);
+
+  console.log('PartialSO component mounted, initial items state:', items);
+
+  // Load saved items on component mount
+  useEffect(() => {
+    const loadSavedItems = async () => {
+      try {
+        const sessionData = await getCurrentSOSession();
+        console.log('Loading session data from database:', sessionData);
+        if (sessionData && sessionData.items) {
+          const parsedItems: SOItem[] = JSON.parse(sessionData.items);
+          console.log('Parsed items:', parsedItems);
+          setItems(parsedItems);
+          console.log('Items state updated with saved items');
+        } else {
+          console.log('No saved items found in database session');
+        }
+      } catch (error) {
+        console.error('Error loading saved SO items:', error);
+      }
+    };
+    
+    loadSavedItems();
+  }, []); // Empty dependency array means this runs only once on mount
+  
+  // Save items to session storage whenever they change
+  useEffect(() => {
+    const saveItems = async () => {
+      try {
+        console.log('Saving items to database session:', items);
+        if (items.length > 0) {
+          const itemsJson = JSON.stringify(items);
+          await updateSOSessionItems(itemsJson);
+          console.log('Items saved successfully to database');
+        } else {
+          console.log('No items to save, updating session with empty items');
+          await updateSOSessionItems('');
+        }
+      } catch (error) {
+        console.error('Error saving SO items to database:', error);
+      }
+    };
+    
+    // Only save if there are items to save
+    if (items.length > 0) {
+      saveItems();
+    } else {
+      console.log('No items to save, clearing any existing saved items in database');
+      // Clear any existing saved items if current items array is empty
+      updateSOSessionItems('').catch(error => {
+        console.error('Error clearing saved items in database:', error);
+      });
+    }
+  }, [items]); // Dependency on items array means this runs whenever items change
 
   // Enable LayoutAnimation for Android
   if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -138,6 +197,7 @@ Qty Sistem: ${item.quantity}`,
   };
 
   const addItemToSO = (item: InventoryItem) => {
+    console.log('addItemToSO called with item:', item);
     const newItem: SOItem = {
       id: Date.now().toString(),
       code: item.code,
@@ -145,13 +205,19 @@ Qty Sistem: ${item.quantity}`,
       sku: item.sku,
       quantity: 1,
       systemQuantity: item.quantity,
-      soQuantity: item.quantity, // Default to system quantity
+      soQuantity: 0, // Default to 0 instead of system quantity
       category: item.category || '', // Add category (for sorting only)
       price: item.price || 0 // Add price
     };
     
-    setItems(prevItems => [...prevItems, newItem]);
+    console.log('Adding new item to SO:', newItem);
+    setItems(prevItems => {
+      const newItems = [...prevItems, newItem];
+      console.log('Updated items state:', newItems);
+      return newItems;
+    });
     setInputText('');
+    console.log('Input text cleared');
   };
 
   const handleF1 = () => {
@@ -179,7 +245,7 @@ Qty Sistem: ${item.quantity}`,
   };
 
   const handleSoQuantityChange = (id: string, value: string) => {
-    // Allow empty values
+    // Allow empty values (will show as empty in UI but store as 0)
     if (value === '') {
       setItems(prevItems => 
         prevItems.map(item => 
@@ -204,6 +270,7 @@ Qty Sistem: ${item.quantity}`,
   };
 
   const handleRemoveItem = (id: string, itemName: string) => {
+    console.log('handleRemoveItem called with id:', id, 'itemName:', itemName);
     Alert.alert(
       'Hapus Item',
       `Apakah Anda yakin ingin menghapus item "${itemName}" dari daftar SO?`,
@@ -211,7 +278,14 @@ Qty Sistem: ${item.quantity}`,
         { text: 'Batal', style: 'cancel' },
         { 
           text: 'Hapus', 
-          onPress: () => setItems(prevItems => prevItems.filter(item => item.id !== id)),
+          onPress: () => {
+            console.log('Removing item with id:', id);
+            setItems(prevItems => {
+              const filteredItems = prevItems.filter(item => item.id !== id);
+              console.log('Items after removal:', filteredItems);
+              return filteredItems;
+            });
+          },
           style: 'destructive'
         }
       ]
@@ -347,9 +421,24 @@ Qty Sistem: ${item.quantity}`,
   );
 
   // Handle process button press - show confirmation with item counts only
-  const handleProcess = () => {
+  const handleProcess = async () => {
+    console.log('handleProcess called with items:', items);
     // Navigate to EditSO with all items
     if (onNavigateToEditSO) {
+      // Update session data to reflect that we're now in the editSO view
+      try {
+        const sessionData = await getCurrentSOSession();
+        console.log('Current session data:', sessionData);
+        if (sessionData) {
+          // Clear the items from the session since we're moving to the next step
+          console.log('Clearing items from session');
+          await updateSOSessionItems('');
+          console.log('Items cleared from session');
+        }
+      } catch (error) {
+        console.error('Error updating SO session:', error);
+      }
+      
       // Show confirmation dialog with item counts only
       const matchingItems = items.filter(item => item.soQuantity === item.systemQuantity);
       const mismatchingItems = items.filter(item => item.soQuantity !== item.systemQuantity);
@@ -373,7 +462,10 @@ Qty Sistem: ${item.quantity}`,
           { text: 'Batal', style: 'cancel' },
           { 
             text: 'Lanjutkan', 
-            onPress: () => onNavigateToEditSO(items)
+            onPress: () => {
+              console.log('Navigating to EditSO with items:', items);
+              onNavigateToEditSO(items);
+            }
           }
         ]
       );
@@ -641,13 +733,13 @@ const styles = StyleSheet.create({
     width: '5%',
   },
   codeSkuColumn: {
-    width: '25%',
+    width: '20%',
   },
   nameColumn: {
-    width: '40%',
+    width: '50%',
   },
   qtyColumn: {
-    width: '20%',
+    width: '15%',
   },
   actionColumn: {
     width: '10%',

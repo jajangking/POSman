@@ -55,7 +55,7 @@ export const initDatabase = async (): Promise<void> => {
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS inventory_transactions (
         id TEXT PRIMARY KEY,
-        itemCode TEXT NOT NULL,
+        itemId TEXT NOT NULL,
         type TEXT NOT NULL,
         quantity INTEGER NOT NULL,
         price REAL NOT NULL,
@@ -63,7 +63,7 @@ export const initDatabase = async (): Promise<void> => {
         reference TEXT,
         createdAt TEXT NOT NULL,
         createdBy TEXT NOT NULL,
-        FOREIGN KEY (itemCode) REFERENCES inventory_items (code)
+        FOREIGN KEY (itemId) REFERENCES inventory_items (code)
       );
     `);
     
@@ -98,6 +98,19 @@ export const initDatabase = async (): Promise<void> => {
         notes TEXT,
         createdAt TEXT NOT NULL,
         FOREIGN KEY (itemCode) REFERENCES inventory_items (code)
+      );
+    `);
+    
+    // Create so_sessions table for stock opname sessions
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS so_sessions (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL, -- 'partial' or 'grand'
+        startTime TEXT NOT NULL,
+        lastView TEXT NOT NULL, -- 'partialSO', 'grandSO', or 'editSO'
+        items TEXT, -- JSON string of SO items
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
       );
     `);
     
@@ -601,7 +614,7 @@ export const createInventoryTransaction = async (transaction: Omit<InventoryTran
     const timestamp = new Date().toISOString();
     
     await database.runAsync(
-      `INSERT INTO inventory_transactions (id, itemCode, type, quantity, price, reason, reference, createdAt, createdBy) 
+      `INSERT INTO inventory_transactions (id, itemId, type, quantity, price, reason, reference, createdAt, createdBy) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       [
         id,
@@ -637,15 +650,16 @@ export const createInventoryTransaction = async (transaction: Omit<InventoryTran
 export const getInventoryTransactionsByItemCode = async (itemCode: string): Promise<InventoryTransaction[]> => {
   try {
     const database = await openDatabase();
-    // Kembali ke nama kolom dengan huruf kapital untuk konsistensi
+    
+    // Gunakan itemId sesuai dengan definisi tabel yang sebenarnya
     const result: any[] = await database.getAllAsync(
-      'SELECT * FROM inventory_transactions WHERE itemCode = ? ORDER BY createdAt DESC',
+      'SELECT * FROM inventory_transactions WHERE itemId = ? ORDER BY createdAt DESC',
       [itemCode]
     );
     
     return result.map((transaction) => ({
       id: transaction.id,
-      itemCode: transaction.itemCode,
+      itemCode: transaction.itemId,
       type: transaction.type,
       quantity: parseInt(transaction.quantity),
       price: parseFloat(transaction.price),
@@ -815,6 +829,136 @@ export const deleteSOMonitoringRecord = async (id: string): Promise<void> => {
     await database.runAsync('DELETE FROM so_monitoring WHERE id = ?;', [id]);
   } catch (error) {
     console.error('Error deleting SO monitoring record:', error);
+    throw error;
+  }
+};
+
+// SO Session functions
+
+// Interface for SO Session
+export interface SOSession {
+  id: string;
+  type: 'partial' | 'grand';
+  startTime: string;
+  lastView: 'partialSO' | 'grandSO' | 'editSO';
+  items: string; // JSON string of SO items
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Create or update SO session
+export const upsertSOSession = async (session: Omit<SOSession, 'id' | 'createdAt' | 'updatedAt'>): Promise<SOSession> => {
+  try {
+    const database = await openDatabase();
+    const timestamp = new Date().toISOString();
+    const id = 'current_so_session'; // Use a fixed ID for the current session
+    
+    // Check if session already exists
+    const existingSession: any = await database.getFirstAsync(
+      'SELECT * FROM so_sessions WHERE id = ?;', 
+      [id]
+    );
+    
+    if (existingSession) {
+      // Update existing session
+      await database.runAsync(
+        `UPDATE so_sessions SET type = ?, startTime = ?, lastView = ?, items = ?, updatedAt = ? WHERE id = ?;`,
+        [
+          session.type,
+          session.startTime,
+          session.lastView,
+          session.items || null,
+          timestamp,
+          id
+        ]
+      );
+    } else {
+      // Create new session
+      await database.runAsync(
+        `INSERT INTO so_sessions (id, type, startTime, lastView, items, createdAt, updatedAt) 
+         VALUES (?, ?, ?, ?, ?, ?, ?);`,
+        [
+          id,
+          session.type,
+          session.startTime,
+          session.lastView,
+          session.items || null,
+          timestamp,
+          timestamp
+        ]
+      );
+    }
+    
+    return {
+      id,
+      type: session.type,
+      startTime: session.startTime,
+      lastView: session.lastView,
+      items: session.items || '',
+      createdAt: existingSession ? existingSession.createdAt : timestamp,
+      updatedAt: timestamp
+    };
+  } catch (error) {
+    console.error('Error upserting SO session:', error);
+    throw error;
+  }
+};
+
+// Get current SO session
+export const getCurrentSOSession = async (): Promise<SOSession | null> => {
+  try {
+    const database = await openDatabase();
+    const result: any = await database.getFirstAsync(
+      'SELECT * FROM so_sessions WHERE id = ?;',
+      ['current_so_session']
+    );
+    
+    if (result) {
+      return {
+        id: result.id,
+        type: result.type as 'partial' | 'grand',
+        startTime: result.startTime,
+        lastView: result.lastView as 'partialSO' | 'grandSO' | 'editSO',
+        items: result.items || '',
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting current SO session:', error);
+    throw error;
+  }
+};
+
+// Delete SO session
+export const deleteSOSession = async (): Promise<void> => {
+  try {
+    const database = await openDatabase();
+    await database.runAsync('DELETE FROM so_sessions WHERE id = ?;', ['current_so_session']);
+  } catch (error) {
+    console.error('Error deleting SO session:', error);
+    throw error;
+  }
+};
+
+// Update SO session items
+export const updateSOSessionItems = async (items: string): Promise<void> => {
+  try {
+    const database = await openDatabase();
+    const timestamp = new Date().toISOString();
+    
+    await database.runAsync(
+      `UPDATE so_sessions SET items = ?, updatedAt = ? WHERE id = ?;`,
+      [
+        items,
+        timestamp,
+        'current_so_session'
+      ]
+    );
+  } catch (error) {
+    console.error('Error updating SO session items:', error);
     throw error;
   }
 };

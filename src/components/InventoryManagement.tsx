@@ -33,9 +33,10 @@ const defaultColumnConfigs: ColumnConfig[] = [
 interface InventoryManagementProps {
   onAddItem: () => void;
   onEditItem: (item: InventoryItem) => void;
+  onViewItemLog: (item: InventoryItem) => void; // Tambahkan prop untuk navigasi ke log item
 }
 
-const InventoryManagement: React.FC<InventoryManagementProps> = ({ onAddItem, onEditItem }) => {
+const InventoryManagement: React.FC<InventoryManagementProps> = ({ onAddItem, onEditItem, onViewItemLog }) => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [allItems, setAllItems] = useState<InventoryItem[]>([]); // Store all items for client-side search
   const [loading, setLoading] = useState(true);
@@ -151,7 +152,9 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({ onAddItem, on
   const handleDeleteItem = async (code: string, name: string) => {
     Alert.alert(
       'Delete Item',
-      `Are you sure you want to delete "${name}"?\n\nThis action cannot be undone.`,
+      `Are you sure you want to delete "${name}"?
+
+This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -361,7 +364,11 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({ onAddItem, on
     
     Alert.alert(
       `Delete ${selectedItems.size} Item${selectedItems.size > 1 ? 's' : ''}`,
-      `Are you sure you want to delete the following ${itemText}?\n\n${selectedItemsList}\n\nThis action cannot be undone.`,
+      `Are you sure you want to delete the following ${itemText}?
+
+${selectedItemsList}
+
+This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -490,9 +497,20 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({ onAddItem, on
   };
 
   const handleViewLogs = (item: InventoryItem) => {
-    setSelectedItem(item);
-    setShowItemDetail(false);
-    setShowItemLog(true);
+    // If onViewItemLog is provided, use it to navigate to the external ItemLogScreen
+    if (onViewItemLog) {
+      onViewItemLog(item);
+    } else {
+      // Otherwise, use the internal navigation
+      setSelectedItem(item);
+      setShowItemDetail(false);
+      setShowItemLog(true);
+    }
+  };
+
+  // Fungsi untuk menangani navigasi ke log item dari tampilan detailed
+  const handleViewItemLog = (item: InventoryItem) => {
+    onViewItemLog(item);
   };
 
   const renderInventoryItem = ({ item, index }: { item: InventoryItem, index: number }) => (
@@ -504,6 +522,7 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({ onAddItem, on
         isSelected={selectedItems.has(item.code)}
         onSelect={handleSelectItem}
         editMode={editMode}
+        onViewItemLog={onViewItemLog} // Tambahkan prop untuk navigasi ke log item
       />
     ) : (
       <CompactInventoryItem
