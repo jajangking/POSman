@@ -127,17 +127,9 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({ onAddItem, on
         inventoryItems = await fetchAllInventoryItems();
       }
       
-      console.log('Loaded inventory items count:', inventoryItems.length);
-      // Check if our test barcode exists in the data
-      const testItem = inventoryItems.find(item => item.code === '8993002010974');
-      if (testItem) {
-        console.log('Test barcode item found:', testItem);
-      } else {
-        console.log('Test barcode item NOT found in loaded data');
-        // Log all barcodes for debugging
-        const barcodes = inventoryItems.map(item => item.code).slice(0, 20); // First 20 barcodes
-        console.log('First 20 barcodes in data:', barcodes);
-      }
+      // console.log('Test barcode item found:', testItem);
+    // console.log('Test barcode item NOT found in loaded data');
+    // console.log('First 20 barcodes in data:', barcodes);
       
       setItems(inventoryItems);
       setAllItems(inventoryItems); // Store all items for client-side search
@@ -175,13 +167,13 @@ This action cannot be undone.`,
     );
   };
 
-  const handleSearch = async (query: string) => {
-    console.log('Search triggered with query:', query);
+  const performSearch = async (query: string) => {
+    // console.log('Search triggered with query:', query);
     
     try {
       // Don't trigger search if query hasn't changed significantly
       if (query.trim() === '' && items.length === allItems.length) {
-        console.log('Skipping search - no significant change');
+        // console.log('Skipping search - no significant change');
         return;
       }
       
@@ -241,6 +233,10 @@ This action cannot be undone.`,
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = async (query: string) => {
+    await performSearch(query);
   };
 
   const performClientSideSearch = (query: string) => {
