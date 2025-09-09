@@ -31,7 +31,7 @@ const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, 
     const loadSavedSession = async () => {
       try {
         const sessionData = await getCurrentSOSession();
-        console.log('Loading session data from database:', sessionData);
+        // console.log('Loading session data from database:', sessionData);
         if (sessionData) {
           const parsedSession: SOSessionData = {
             type: sessionData.type,
@@ -40,9 +40,9 @@ const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, 
           };
           setSavedSession(parsedSession);
           setHasActiveSession(true);
-          console.log('Session loaded successfully:', parsedSession);
+          // console.log('Session loaded successfully:', parsedSession);
         } else {
-          console.log('No session data found in database');
+          // console.log('No session data found in database');
         }
       } catch (error) {
         console.error('Error loading SO session:', error);
@@ -83,7 +83,7 @@ const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, 
                 const sessionData = {
                   type: selectedSOType,
                   startTime: new Date().toISOString(),
-                  lastView: selectedSOType === 'partial' ? 'partialSO' : 'grandSO',
+                  lastView: selectedSOType === 'partial' ? 'partialSO' : 'editSO',
                   items: ''
                 };
                 
@@ -137,6 +137,7 @@ const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, 
         // Set active session flag
         setHasActiveSession(true);
         // Navigate to the last view in the session
+        // console.log('Continuing session from last view:', savedSession.lastView);
         onNavigate(savedSession.lastView);
       } catch (error) {
         console.error('Error continuing SO session:', error);
@@ -157,15 +158,15 @@ const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, 
       const sessionData = {
         type: selectedSOType,
         startTime: new Date().toISOString(),
-        lastView: selectedSOType === 'partial' ? 'partialSO' : 'grandSO',
+        lastView: selectedSOType === 'partial' ? 'partialSO' : 'grandSO', // Arahkan ke grandSO untuk Grand SO
         items: ''
       };
       
       try {
-        console.log('Saving session data to database:', sessionData);
+        // console.log('Saving session data to database:', sessionData);
         await upsertSOSession(sessionData);
         setHasActiveSession(true);
-        console.log('Session saved successfully');
+        // console.log('Session saved successfully');
       } catch (error) {
         console.error('Error saving SO session:', error);
       }
@@ -174,7 +175,7 @@ const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, 
       if (selectedSOType === 'partial') {
         onNavigate('partialSO');
       } else if (selectedSOType === 'grand') {
-        onNavigate('grandSO');
+        onNavigate('grandSO'); // Ke grandSO terlebih dahulu untuk Grand SO
       }
     }
   };
@@ -192,10 +193,9 @@ const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, 
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-            <Text style={styles.backButtonText}>←</Text>
+            <Text style={styles.backButtonText}>← Kembali</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Stock Opname</Text>
-          <View style={styles.placeholder} />
         </View>
         
         <View style={styles.content}>
@@ -281,12 +281,6 @@ const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, 
                 >
                   <Text style={styles.actionButtonText}>Start SO</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.editButton]}
-                  onPress={() => onNavigate && onNavigate('editSO')}
-                >
-                  <Text style={styles.editButtonText}>Edit SO</Text>
-                </TouchableOpacity>
               </>
             )}
           </View>
@@ -306,7 +300,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     padding: 15,
     backgroundColor: 'white',
@@ -315,18 +309,27 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
+    position: 'relative',
   },
   backButton: {
-    padding: 5,
-    minWidth: 40,
-    alignItems: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#f0f0f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'absolute',
+    left: 15,
   },
   backButtonText: {
-    fontSize: 20,
+    fontSize: 16,
     color: '#007AFF',
+    fontWeight: '600',
   },
-  placeholder: {
-    minWidth: 40, // Same width as back button to center the title
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
   },
   title: {
     fontSize: 20,
@@ -419,23 +422,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF9500',
     marginTop: 10,
   },
-  editButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    minWidth: 150,
-    alignItems: 'center',
-  },
   disabledButton: {
     backgroundColor: '#cccccc',
   },
   actionButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  editButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',

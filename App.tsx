@@ -14,7 +14,8 @@ import SOHistoryScreen from './src/components/SOHistoryScreen';
 import MonitoringItemsScreen from './src/components/MonitoringItemsScreen';
 import ItemLogScreen from './src/components/ItemLogScreen';
 import { User } from './src/models/User';
-import { getSOHistoryById } from './src/services/SOHistoryService'; // Import the new function
+import { getSOHistoryById } from './src/services/SOHistoryService';
+import { getCurrentSOSession, upsertSOSession } from './src/services/DatabaseService'; // Import the SO session functions
 
 // Main app component wrapped with AuthProvider
 export default function App() {
@@ -27,14 +28,16 @@ export default function App() {
 
 // App content that uses authentication
 const AppContent: React.FC = () => {
-  const { currentUser, isAuthenticated, login, logout, isLoading } = useAuth();
+  const authContext = useAuth();
+  const { currentUser, isAuthenticated, login, logout, isLoading } = authContext;
   const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog'>('home');
   const [soItems, setSoItems] = useState<any[]>([]); // State to hold SO items data
   const [soReportData, setSoReportData] = useState<any>(null); // State to hold SO report data
   const [itemLogData, setItemLogData] = useState<{code: string, name: string} | null>(null); // State to hold item log data
   const [itemLogSource, setItemLogSource] = useState<'inventory' | 'soReport' | null>(null); // State to track where item log was opened from
   const stockOpnameRef = useRef<{ handleHardwareBackPress: () => void }>(null);
-  const editSORef = useRef<{ handleHardwareBackPress: () => void }>(null);
+  // Hapus editSORef karena EditSO tidak lagi menggunakan forwardRef
+  // Hapus partialSORef karena PartialSO tidak lagi menggunakan forwardRef
 
   // Handle hardware back button
   useEffect(() => {
@@ -62,17 +65,6 @@ const AppContent: React.FC = () => {
         }
         return true; // Prevent default behavior
       }
-      // If we're in EditSO view, delegate to the component
-      else if (currentView === 'editSO') {
-        // Call the EditSO component's hardware back button handler
-        if (editSORef.current && editSORef.current.handleHardwareBackPress) {
-          editSORef.current.handleHardwareBackPress();
-        } else {
-          // Fallback to default behavior if ref is not available
-          setCurrentView('home');
-        }
-        return true; // Prevent default behavior
-      }
       // If we're in other views, go back to home
       else {
         setCurrentView('home');
@@ -87,7 +79,26 @@ const AppContent: React.FC = () => {
     login(user);
   };
 
-  const handleNavigate = (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog') => {
+  const handleNavigate = async (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog') => {
+    // Update session data to reflect the current view if we're in an SO session
+    if (view === 'partialSO' || view === 'editSO') {
+      try {
+        const { getCurrentSOSession, upsertSOSession } = require('./src/services/DatabaseService');
+        const sessionData = await getCurrentSOSession();
+        if (sessionData) {
+          // Update the lastView field to reflect the current view
+          const updatedSession = {
+            ...sessionData,
+            lastView: view
+          };
+          await upsertSOSession(updatedSession);
+          console.log('Session updated with last view:', view);
+        }
+      } catch (error) {
+        console.error('Error updating SO session with last view:', error);
+      }
+    }
+    
     setCurrentView(view);
   };
 
@@ -151,14 +162,26 @@ const AppContent: React.FC = () => {
         />
       )}
       {currentView === 'grandSO' && (
-        <GrandSO onBack={() => handleNavigate('home')} />
+        <GrandSO 
+          onBack={() => handleNavigate('home')} 
+          onNavigateToEditSO={(items) => {
+            setSoItems(items);
+            handleNavigate('editSO');
+          }}
+        />
       )}
       {currentView === 'editSO' && (
         <EditSO 
-          ref={editSORef}
           onBack={(reportData) => {
-            setSoReportData(reportData);
-            setCurrentView('soReport');
+            // Check if we're exiting without completing the SO process
+            if (reportData && reportData.exitWithoutComplete) {
+              // Just go back to home without showing the report
+              setCurrentView('home');
+            } else {
+              // Normal completion - show the report
+              setSoReportData(reportData);
+              setCurrentView('soReport');
+            }
           }}
           items={soItems}
           currentUser={currentUser}
