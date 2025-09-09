@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, FlatList, Alert, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, FlatList, Alert, Keyboard, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchInventoryItemByCode, modifyInventoryItem } from '../services/InventoryService';
-import { deleteSOSession } from '../services/DatabaseService';
+import { getCurrentSOSession, updateSOSessionItems, deleteSOSession, upsertSOSession } from '../services/DatabaseService';
 import { createSOHistory } from '../services/SOHistoryService';
 
 // Define the SOItem interface to match the PartialSO component
@@ -24,10 +24,11 @@ interface EditSOProps {
   currentUser?: any;
 }
 
-const EditSO = React.forwardRef(({ onBack, items = [], currentUser }: EditSOProps, ref) => {
+const EditSO: React.FC<EditSOProps> = ({ onBack, items = [], currentUser }) => {
   const [soItems, setSoItems] = useState<SOItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSessionSaving, setIsSessionSaving] = useState(false); // Tambahkan state tracking penyimpanan sesi
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const startTimeRef = useRef<number>(Date.now());
 
@@ -60,6 +61,63 @@ const EditSO = React.forwardRef(({ onBack, items = [], currentUser }: EditSOProp
     initializeItems();
   }, [items]);
 
+  // Load saved items on component mount (jika ada sesi yang tersimpan)
+  useEffect(() => {
+    const loadSavedItems = async () => {
+      try {
+        const sessionData = await getCurrentSOSession();
+        // console.log('Loading session data from database in EditSO:', sessionData);
+        if (sessionData && sessionData.items) {
+          const parsedItems: SOItem[] = JSON.parse(sessionData.items);
+          // console.log('Parsed items in EditSO:', parsedItems);
+          // Hanya gunakan item yang tersimpan jika belum ada item yang diinisialisasi
+          if (soItems.length === 0) {
+            setSoItems(parsedItems);
+            // console.log('Items state updated with saved items in EditSO');
+          }
+        } else {
+          // console.log('No saved items found in database session for EditSO');
+        }
+      } catch (error) {
+        console.error('Error loading saved SO items in EditSO:', error);
+      }
+    };
+    
+    // Hanya load jika belum ada item
+    if (soItems.length === 0) {
+      loadSavedItems();
+    }
+  }, []); // Empty dependency array means this runs only once on mount
+
+  // Save items to session storage whenever they change with debounce
+  useEffect(() => {
+    // Jangan simpan jika sedang menyimpan sesi
+    if (isSessionSaving) return;
+    
+    // Gunakan debounce untuk menghindari terlalu sering menyimpan
+    const timer = setTimeout(async () => {
+      try {
+        setIsSessionSaving(true);
+        // console.log('Saving items to database session in EditSO:', soItems);
+        if (soItems.length > 0) {
+          const itemsJson = JSON.stringify(soItems);
+          await updateSOSessionItems(itemsJson);
+          // console.log('Items saved successfully to database in EditSO');
+        } else {
+          // console.log('No items to save in EditSO, updating session with empty items');
+          await updateSOSessionItems('');
+        }
+      } catch (error) {
+        console.error('Error saving SO items to database in EditSO:', error);
+      } finally {
+        setIsSessionSaving(false);
+      }
+    }, 500); // Tunggu 500ms setelah perubahan terakhir
+    
+    // Bersihkan timer jika items berubah sebelum timeout
+    return () => clearTimeout(timer);
+  }, [soItems, isSessionSaving]); // Dependency on soItems array and isSessionSaving means this runs when items change or when saving state changes
+
   // Keyboard event listeners
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
@@ -74,6 +132,45 @@ const EditSO = React.forwardRef(({ onBack, items = [], currentUser }: EditSOProp
       keyboardDidHideListener.remove();
     };
   }, []);
+
+  // Handle Android back button press
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Show confirmation dialog when trying to exit during an SO session
+      Alert.alert(
+        'Konfirmasi Keluar',
+        'Anda memiliki sesi Stock Opname yang sedang berjalan. Apakah Anda yakin ingin keluar? Data akan disimpan sementara dan dapat dilanjutkan nanti.',
+        [
+          {
+            text: 'Batal',
+            style: 'cancel',
+          },
+          {
+            text: 'Keluar',
+            style: 'destructive',
+            onPress: async () => {
+              // Save current session before exiting
+              try {
+                await handleSaveDraft(false); // Save draft without showing alert
+                if (onBack) {
+                  // Pass a special parameter to indicate we're exiting without completing
+                  onBack({ exitWithoutComplete: true });
+                }
+              } catch (error) {
+                console.error('Error saving draft on exit:', error);
+                if (onBack) {
+                  onBack({ exitWithoutComplete: true });
+                }
+              }
+            },
+          },
+        ]
+      );
+      return true; // Prevent default behavior
+    });
+
+    return () => backHandler.remove();
+  }, [soItems, onBack]);
 
   // Refresh system quantities while preserving physical quantities
   const handleRefresh = async () => {
@@ -350,7 +447,7 @@ Total item dengan selisih: ${mismatchedItems.length}`,
                 
                 // Simpan ID riwayat SO
                 soHistoryId = soHistory.id;
-                console.log('SO History ID:', soHistoryId);
+                // console.log('SO History ID:', soHistoryId);
               } catch (error) {
                 console.error('Error saving SO history:', error);
                 Alert.alert(
@@ -413,6 +510,43 @@ Total item dengan selisih: ${mismatchedItems.length}`,
     );
   };
 
+  // Fungsi untuk menyimpan sementara (draft) tanpa menyelesaikan SO
+  const handleSaveDraft = async (showAlert = true) => {
+    try {
+      // Update session data to reflect current state
+      const itemsJson = JSON.stringify(soItems);
+      await updateSOSessionItems(itemsJson);
+      
+      // Update session to reflect that we're still in editSO
+      const sessionData = await getCurrentSOSession();
+      if (sessionData) {
+        const updatedSession = {
+          ...sessionData,
+          lastView: 'editSO'
+        };
+        await upsertSOSession(updatedSession);
+        // console.log('Session updated with last view: editSO');
+      }
+      
+      if (showAlert) {
+        Alert.alert(
+          'Draft Tersimpan',
+          'Data SO telah disimpan sementara. Anda dapat melanjutkan nanti.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      if (showAlert) {
+        Alert.alert(
+          'Error',
+          'Terjadi kesalahan saat menyimpan draft: ' + (error.message || 'Unknown error')
+        );
+      }
+      throw error;
+    }
+  };
+
   // Table header component
   const renderTableHeader = () => (
     <View style={styles.tableHeader}>
@@ -461,33 +595,6 @@ Total item dengan selisih: ${mismatchedItems.length}`,
       </View>
     );
   };
-
-  // Expose method for hardware back button handling
-  React.useImperativeHandle(ref, () => ({
-    handleHardwareBackPress: () => {
-      // Show confirmation dialog when hardware back button is pressed
-      Alert.alert(
-        'Konfirmasi Kembali',
-        'Anda sedang dalam proses Edit SO. Apakah Anda yakin ingin kembali? Data yang belum disimpan akan hilang.',
-        [
-          {
-            text: 'Batal',
-            style: 'cancel'
-          },
-          {
-            text: 'Kembali',
-            style: 'destructive',
-            onPress: () => {
-              // Navigate back to home
-              if (onBack) {
-                onBack(null); // Pass null since we're not completing the SO
-              }
-            }
-          }
-        ]
-      );
-    }
-  }));
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -591,11 +698,19 @@ Total item dengan selisih: ${mismatchedItems.length}`,
               {isSaving ? 'Memperbaiki...' : 'Fix SO'}
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.draftButton]} 
+            onPress={() => handleSaveDraft(true)}
+          >
+            <Text style={styles.draftButtonText}>
+              Simpan Draft
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
   );
-});
+};
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -794,6 +909,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 1,
   },
+  draftButton: {
+    backgroundColor: '#FF9500',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 6,
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    flex: 1,
+    marginLeft: 10,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
   disabledButton: {
     backgroundColor: '#ccc',
   },
@@ -802,6 +932,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  draftButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
 
-export default React.memo(EditSO);
+export default EditSO;

@@ -13,9 +13,12 @@ import SOReportScreen from './src/components/SOReportScreen';
 import SOHistoryScreen from './src/components/SOHistoryScreen';
 import MonitoringItemsScreen from './src/components/MonitoringItemsScreen';
 import ItemLogScreen from './src/components/ItemLogScreen';
+import CashierScreen from './src/components/CashierScreen'; // Import CashierScreen
+import MemberManagementScreen from './src/components/MemberManagementScreen'; // Import MemberManagementScreen
 import { User } from './src/models/User';
 import { getSOHistoryById } from './src/services/SOHistoryService';
 import { getCurrentSOSession, upsertSOSession } from './src/services/DatabaseService'; // Import the SO session functions
+import { initializeSampleProducts } from './src/services/DatabaseInitializer'; // Import database initializer
 
 // Main app component wrapped with AuthProvider
 export default function App() {
@@ -30,7 +33,7 @@ export default function App() {
 const AppContent: React.FC = () => {
   const authContext = useAuth();
   const { currentUser, isAuthenticated, login, logout, isLoading } = authContext;
-  const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'memberManagement'>('home');
   const [soItems, setSoItems] = useState<any[]>([]); // State to hold SO items data
   const [soReportData, setSoReportData] = useState<any>(null); // State to hold SO report data
   const [itemLogData, setItemLogData] = useState<{code: string, name: string} | null>(null); // State to hold item log data
@@ -38,6 +41,11 @@ const AppContent: React.FC = () => {
   const stockOpnameRef = useRef<{ handleHardwareBackPress: () => void }>(null);
   // Hapus editSORef karena EditSO tidak lagi menggunakan forwardRef
   // Hapus partialSORef karena PartialSO tidak lagi menggunakan forwardRef
+
+  // Initialize database with sample products
+  useEffect(() => {
+    initializeSampleProducts();
+  }, []);
 
   // Handle hardware back button
   useEffect(() => {
@@ -79,7 +87,7 @@ const AppContent: React.FC = () => {
     login(user);
   };
 
-  const handleNavigate = async (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog') => {
+  const handleNavigate = async (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'memberManagement') => {
     // Update session data to reflect the current view if we're in an SO session
     if (view === 'partialSO' || view === 'editSO') {
       try {
@@ -245,6 +253,17 @@ const AppContent: React.FC = () => {
               handleNavigate('inventory');
             }
           }}
+        />
+      )}
+      {currentView === 'cashier' && (
+        <CashierScreen 
+          onBack={() => handleNavigate('home')}
+          onNavigateToMemberManagement={() => handleNavigate('memberManagement')}
+        />
+      )}
+      {currentView === 'memberManagement' && (
+        <MemberManagementScreen 
+          onBack={() => handleNavigate('cashier')}
         />
       )}
     </View>

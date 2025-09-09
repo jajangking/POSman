@@ -66,22 +66,22 @@ const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, onNavigateToDas
         // Load item analysis (only for items in current SO)
         const analysis = await analyzeItems(data.items);
         setItemAnalysis(analysis);
-        console.log('Item analysis loaded:', analysis);
+        // console.log('Item analysis loaded:', analysis);
         
         // Load items for monitoring (only for items in current SO)
         const monitoring = await getItemsForMonitoring(data.items);
         setItemsForMonitoring(monitoring);
-        console.log('Items for monitoring loaded:', monitoring);
+        // console.log('Items for monitoring loaded:', monitoring);
         
         // Load consecutive SO items (only for items in current SO)
         const consecutiveItems = await getConsecutiveSOItems(data.items);
         setConsecutiveSOItems(consecutiveItems);
-        console.log('Consecutive SO items loaded:', consecutiveItems);
+        // console.log('Consecutive SO items loaded:', consecutiveItems);
         
         // Load SO statistics
         try {
           const history = await getAllSOHistory();
-          console.log('SO history loaded:', history);
+          // console.log('SO history loaded:', history);
           const totalSO = history.length;
           const avgItemsPerSO = totalSO > 0 
             ? Math.round(history.reduce((sum, so) => sum + so.totalItems, 0) / totalSO)
@@ -95,7 +95,7 @@ const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, onNavigateToDas
           
           // Get total items in database for percentage calculation
           const totalDatabaseItems = await getTotalItemsInDatabase();
-          console.log('Total database items:', totalDatabaseItems);
+          // console.log('Total database items:', totalDatabaseItems);
           const percentageSO = totalDatabaseItems > 0 
             ? `${Math.round((data.items.length / totalDatabaseItems) * 100)}%`
             : '0%';
@@ -107,7 +107,7 @@ const SOReportScreen: React.FC<SOReportScreenProps> = ({ onBack, onNavigateToDas
             totalDatabaseItems,
             percentageSO
           });
-          console.log('SO statistics loaded:', { totalSO, avgItemsPerSO, avgDuration, totalDatabaseItems, percentageSO });
+          // console.log('SO statistics loaded:', { totalSO, avgItemsPerSO, avgDuration, totalDatabaseItems, percentageSO });
         } catch (error) {
           console.error('Error loading SO statistics:', error);
         }

@@ -29,6 +29,7 @@ export interface InventoryTransaction {
   price: number;
   reason: string;
   reference?: string;
+  memberId?: string;
   createdAt: Date;
   createdBy: string;
 }

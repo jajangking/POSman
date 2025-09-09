@@ -5,7 +5,7 @@ import { User } from '../models/User';
 
 interface HomeDashboardProps {
   user: User;
-  onNavigate: (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'soHistory' | 'monitoring') => void;
+  onNavigate: (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'soHistory' | 'monitoring' | 'cashier') => void;
   onLogout: () => void;
 }
 
@@ -40,7 +40,7 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
               
               <TouchableOpacity 
                 style={styles.actionCard} 
-                onPress={() => handleFeaturePress('Sales')}
+                onPress={() => onNavigate('cashier')}
               >
                 <Text style={styles.actionIcon}>💰</Text>
                 <Text style={styles.actionTitle}>Sales</Text>

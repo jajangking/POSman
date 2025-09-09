@@ -29,9 +29,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Create default users if they don't exist
       await createDefaultUsers();
       
-      // Check if we have any users in the database
       const users = await getAllUsers();
-      console.log(`Found ${users.length} users in database`);
+    // console.log(`Found ${users.length} users in database`);
       
       setIsLoading(false);
     } catch (err) {

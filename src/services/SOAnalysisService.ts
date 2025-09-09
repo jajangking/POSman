@@ -287,9 +287,11 @@ export const getConsecutiveSOItems = async (currentSoItems: any[]): Promise<{min
     // Track consecutive occurrences for each item
     const consecutiveTracker: { [key: string]: { 
       name: string,
-      minusCount: number,
-      plusCount: number,
-      lastType: 'minus' | 'plus' | null
+      consecutiveMinus: number,
+      maxConsecutiveMinus: number,
+      consecutivePlus: number,
+      maxConsecutivePlus: number,
+      lastDifferenceType: 'minus' | 'plus' | 'zero' | null
     } } = {};
     
     // Process history chronologically (oldest first)
@@ -308,40 +310,50 @@ export const getConsecutiveSOItems = async (currentSoItems: any[]): Promise<{min
             if (!consecutiveTracker[item.code]) {
               consecutiveTracker[item.code] = {
                 name: item.name,
-                minusCount: 0,
-                plusCount: 0,
-                lastType: null
+                consecutiveMinus: 0,
+                maxConsecutiveMinus: 0,
+                consecutivePlus: 0,
+                maxConsecutivePlus: 0,
+                lastDifferenceType: null
               };
             }
+            
+            const tracker = consecutiveTracker[item.code];
             
             // Update consecutive counts based on difference
             if (item.difference < 0) {
               // Minus case
-              if (consecutiveTracker[item.code].lastType === 'minus') {
+              if (tracker.lastDifferenceType === 'minus') {
                 // Continue consecutive minus count
-                consecutiveTracker[item.code].minusCount++;
+                tracker.consecutiveMinus++;
               } else {
                 // Start new consecutive minus count
-                consecutiveTracker[item.code].minusCount = 1;
+                tracker.consecutiveMinus = 1;
               }
-              consecutiveTracker[item.code].lastType = 'minus';
-              consecutiveTracker[item.code].plusCount = 0; // Reset plus count
+              tracker.lastDifferenceType = 'minus';
+              
+              // Update max consecutive minus
+              if (tracker.consecutiveMinus > tracker.maxConsecutiveMinus) {
+                tracker.maxConsecutiveMinus = tracker.consecutiveMinus;
+              }
             } else if (item.difference > 0) {
               // Plus case
-              if (consecutiveTracker[item.code].lastType === 'plus') {
+              if (tracker.lastDifferenceType === 'plus') {
                 // Continue consecutive plus count
-                consecutiveTracker[item.code].plusCount++;
+                tracker.consecutivePlus++;
               } else {
                 // Start new consecutive plus count
-                consecutiveTracker[item.code].plusCount = 1;
+                tracker.consecutivePlus = 1;
               }
-              consecutiveTracker[item.code].lastType = 'plus';
-              consecutiveTracker[item.code].minusCount = 0; // Reset minus count
+              tracker.lastDifferenceType = 'plus';
+              
+              // Update max consecutive plus
+              if (tracker.consecutivePlus > tracker.maxConsecutivePlus) {
+                tracker.maxConsecutivePlus = tracker.consecutivePlus;
+              }
             } else {
-              // Zero difference - reset both counts
-              consecutiveTracker[item.code].minusCount = 0;
-              consecutiveTracker[item.code].plusCount = 0;
-              consecutiveTracker[item.code].lastType = null;
+              // Zero difference - just update the last type, don't reset ongoing sequences
+              tracker.lastDifferenceType = 'zero';
             }
           }
         }
@@ -350,25 +362,26 @@ export const getConsecutiveSOItems = async (currentSoItems: any[]): Promise<{min
       }
     }
     
-    // Extract items with consecutive occurrences >= 2
+    // Extract items with consecutive occurrences >= 3 (more meaningful pattern)
     const minusItems: ConsecutiveSOItem[] = [];
     const plusItems: ConsecutiveSOItem[] = [];
     
     Object.keys(consecutiveTracker).forEach(code => {
       const tracker = consecutiveTracker[code];
-      if (tracker.minusCount >= 2) {
+      // Only show items with 3 or more consecutive occurrences
+      if (tracker.maxConsecutiveMinus >= 3) {
         minusItems.push({
           code,
           name: tracker.name,
-          consecutiveCount: tracker.minusCount,
+          consecutiveCount: tracker.maxConsecutiveMinus,
           type: 'minus'
         });
       }
-      if (tracker.plusCount >= 2) {
+      if (tracker.maxConsecutivePlus >= 3) {
         plusItems.push({
           code,
           name: tracker.name,
-          consecutiveCount: tracker.plusCount,
+          consecutiveCount: tracker.maxConsecutivePlus,
           type: 'plus'
         });
       }

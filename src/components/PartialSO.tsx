@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, FlatList, Modal, Alert, Platform, Keyboard, LayoutAnimation, UIManager } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, FlatList, Modal, Alert, Platform, Keyboard, LayoutAnimation, UIManager, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ScannerModal from './ScannerModal';
 import ItemListModal from './ItemListModal';
 import { fetchInventoryItemByCode, fetchAllInventoryItems } from '../services/InventoryService';
-import { getCurrentSOSession, updateSOSessionItems, deleteSOSession } from '../services/DatabaseService';
+import { getCurrentSOSession, updateSOSessionItems, deleteSOSession, upsertSOSession } from '../services/DatabaseService';
 import { InventoryItem } from '../models/Inventory';
 
 // Define session storage keys
@@ -37,24 +37,25 @@ const PartialSO: React.FC<PartialSOProps> = ({ onBack, onNavigateToEditSO }) => 
   const [itemListVisible, setItemListVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // Tambahkan state tracking penyimpanan
   const scrollViewRef = useRef<ScrollView>(null);
   const bottomButtonContainerRef = useRef<View>(null);
 
-  console.log('PartialSO component mounted, initial items state:', items);
+  // console.log('PartialSO component mounted, initial items state:', items);
 
   // Load saved items on component mount
   useEffect(() => {
     const loadSavedItems = async () => {
       try {
         const sessionData = await getCurrentSOSession();
-        console.log('Loading session data from database:', sessionData);
+        // console.log('Loading session data from database:', sessionData);
         if (sessionData && sessionData.items) {
           const parsedItems: SOItem[] = JSON.parse(sessionData.items);
-          console.log('Parsed items:', parsedItems);
+          // console.log('Parsed items:', parsedItems);
           setItems(parsedItems);
-          console.log('Items state updated with saved items');
+          // console.log('Items state updated with saved items');
         } else {
-          console.log('No saved items found in database session');
+          // console.log('No saved items found in database session');
         }
       } catch (error) {
         console.error('Error loading saved SO items:', error);
@@ -64,40 +65,69 @@ const PartialSO: React.FC<PartialSOProps> = ({ onBack, onNavigateToEditSO }) => 
     loadSavedItems();
   }, []); // Empty dependency array means this runs only once on mount
   
-  // Save items to session storage whenever they change
+  // Save items to session storage whenever they change with debounce
   useEffect(() => {
-    const saveItems = async () => {
+    // Jangan simpan jika sedang menyimpan
+    if (isSaving) return;
+    
+    // Gunakan debounce untuk menghindari terlalu sering menyimpan
+    const timer = setTimeout(async () => {
       try {
-        console.log('Saving items to database session:', items);
+        setIsSaving(true);
+        // console.log('Saving items to database session:', items);
         if (items.length > 0) {
           const itemsJson = JSON.stringify(items);
           await updateSOSessionItems(itemsJson);
-          console.log('Items saved successfully to database');
+          // console.log('Items saved successfully to database');
         } else {
-          console.log('No items to save, updating session with empty items');
+          // console.log('No items to save, updating session with empty items');
           await updateSOSessionItems('');
         }
       } catch (error) {
         console.error('Error saving SO items to database:', error);
+      } finally {
+        setIsSaving(false);
       }
-    };
+    }, 500); // Tunggu 500ms setelah perubahan terakhir
     
-    // Only save if there are items to save
-    if (items.length > 0) {
-      saveItems();
-    } else {
-      console.log('No items to save, clearing any existing saved items in database');
-      // Clear any existing saved items if current items array is empty
-      updateSOSessionItems('').catch(error => {
-        console.error('Error clearing saved items in database:', error);
-      });
-    }
-  }, [items]); // Dependency on items array means this runs whenever items change
+    // Bersihkan timer jika items berubah sebelum timeout
+    return () => clearTimeout(timer);
+  }, [items, isSaving]); // Dependency on items array and isSaving means this runs when items change or when saving state changes
 
   // Enable LayoutAnimation for Android
   if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
   }
+
+  // Handle Android back button press
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Show confirmation dialog when trying to exit during an SO session
+      Alert.alert(
+        'Konfirmasi Keluar',
+        'Anda memiliki sesi Stock Opname yang sedang berjalan. Apakah Anda yakin ingin keluar? Data akan disimpan sementara dan dapat dilanjutkan nanti.',
+        [
+          {
+            text: 'Batal',
+            style: 'cancel',
+          },
+          {
+            text: 'Keluar',
+            style: 'destructive',
+            onPress: () => {
+              // Save current session before exiting
+              if (onBack) {
+                onBack();
+              }
+            },
+          },
+        ]
+      );
+      return true; // Prevent default behavior
+    });
+
+    return () => backHandler.remove();
+  }, [items, onBack]);
 
   // Handle keyboard events
   useEffect(() => {
@@ -119,10 +149,10 @@ const PartialSO: React.FC<PartialSOProps> = ({ onBack, onNavigateToEditSO }) => 
   }, []);
 
   const handleScan = () => {
-    console.log('Scan button pressed');
-    console.log('Setting scannerVisible to true');
+    // console.log('Scan button pressed');
+    // console.log('Setting scannerVisible to true');
     setScannerVisible(true);
-    console.log('scannerVisible state after set:', scannerVisible);
+    // console.log('scannerVisible state after set:', scannerVisible);
   };
 
   const handleBarcodeScanned = (barcode: string) => {
@@ -132,7 +162,7 @@ const PartialSO: React.FC<PartialSOProps> = ({ onBack, onNavigateToEditSO }) => 
   };
 
   const handleAdd = () => {
-    console.log('Add button pressed');
+    // console.log('Add button pressed');
     if (inputText.trim()) {
       processItemLookup(inputText);
     }
@@ -179,13 +209,7 @@ const PartialSO: React.FC<PartialSOProps> = ({ onBack, onNavigateToEditSO }) => 
   const showAddItemConfirmation = (item: InventoryItem) => {
     Alert.alert(
       'Tambah Item ke SO',
-      `Apakah Anda yakin ingin menambahkan item berikut ke daftar SO?
-
-Kode: ${item.code}
-Nama: ${item.name}
-SKU: ${item.sku || '-'}
-Kategori: ${item.category || '-'}
-Qty Sistem: ${item.quantity}`,
+      `Apakah Anda yakin ingin menambahkan item berikut ke daftar SO?\n\nKode: ${item.code}\nNama: ${item.name}\nSKU: ${item.sku || '-'}\nKategori: ${item.category || '-'}\nQty Sistem: ${item.quantity}`,
       [
         { text: 'Batal', style: 'cancel' },
         { 
@@ -197,7 +221,7 @@ Qty Sistem: ${item.quantity}`,
   };
 
   const addItemToSO = (item: InventoryItem) => {
-    console.log('addItemToSO called with item:', item);
+    // console.log('addItemToSO called with item:', item);
     const newItem: SOItem = {
       id: Date.now().toString(),
       code: item.code,
@@ -210,21 +234,21 @@ Qty Sistem: ${item.quantity}`,
       price: item.price || 0 // Add price
     };
     
-    console.log('Adding new item to SO:', newItem);
+    // console.log('Adding new item to SO:', newItem);
     setItems(prevItems => {
       const newItems = [...prevItems, newItem];
-      console.log('Updated items state:', newItems);
+      // console.log('Updated items state:', newItems);
       return newItems;
     });
     setInputText('');
-    console.log('Input text cleared');
+    // console.log('Input text cleared');
   };
 
   const handleF1 = () => {
-    console.log('F1 button pressed');
-    console.log('Setting itemListVisible to true');
+    // console.log('F1 button pressed');
+    // console.log('Setting itemListVisible to true');
     setItemListVisible(true);
-    console.log('itemListVisible state after set:', itemListVisible);
+    // console.log('itemListVisible state after set:', itemListVisible);
   };
 
   const handleItemSelect = (item: InventoryItem) => {
@@ -270,7 +294,7 @@ Qty Sistem: ${item.quantity}`,
   };
 
   const handleRemoveItem = (id: string, itemName: string) => {
-    console.log('handleRemoveItem called with id:', id, 'itemName:', itemName);
+    // console.log('handleRemoveItem called with id:', id, 'itemName:', itemName);
     Alert.alert(
       'Hapus Item',
       `Apakah Anda yakin ingin menghapus item "${itemName}" dari daftar SO?`,
@@ -279,10 +303,10 @@ Qty Sistem: ${item.quantity}`,
         { 
           text: 'Hapus', 
           onPress: () => {
-            console.log('Removing item with id:', id);
+            // console.log('Removing item with id:', id);
             setItems(prevItems => {
               const filteredItems = prevItems.filter(item => item.id !== id);
-              console.log('Items after removal:', filteredItems);
+              // console.log('Items after removal:', filteredItems);
               return filteredItems;
             });
           },
@@ -422,23 +446,30 @@ Qty Sistem: ${item.quantity}`,
 
   // Handle process button press - show confirmation with item counts only
   const handleProcess = async () => {
-    console.log('handleProcess called with items:', items);
-    // Navigate to EditSO with all items
-    if (onNavigateToEditSO) {
-      // Update session data to reflect that we're now in the editSO view
-      try {
-        const sessionData = await getCurrentSOSession();
-        console.log('Current session data:', sessionData);
-        if (sessionData) {
-          // Clear the items from the session since we're moving to the next step
-          console.log('Clearing items from session');
-          await updateSOSessionItems('');
-          console.log('Items cleared from session');
-        }
-      } catch (error) {
-        console.error('Error updating SO session:', error);
+    // console.log('handleProcess called with items:', items);
+    // Save draft before navigating to EditSO and update session
+    try {
+      // Update session to reflect that we're going to editSO
+      const sessionData = await getCurrentSOSession();
+      if (sessionData) {
+        const updatedSession = {
+          ...sessionData,
+          lastView: 'editSO'
+        };
+        await upsertSOSession(updatedSession);
+        // console.log('Session updated with last view: editSO');
       }
       
+      // Save items as draft
+      const itemsJson = JSON.stringify(items);
+      await updateSOSessionItems(itemsJson);
+      // console.log('Items saved successfully to database before navigating to EditSO');
+    } catch (error) {
+      console.error('Error saving SO session/items to database before navigating to EditSO:', error);
+    }
+    
+    // Navigate to EditSO with all items
+    if (onNavigateToEditSO) {
       // Show confirmation dialog with item counts only
       const matchingItems = items.filter(item => item.soQuantity === item.systemQuantity);
       const mismatchingItems = items.filter(item => item.soQuantity !== item.systemQuantity);
@@ -463,7 +494,7 @@ Qty Sistem: ${item.quantity}`,
           { 
             text: 'Lanjutkan', 
             onPress: () => {
-              console.log('Navigating to EditSO with items:', items);
+              // console.log('Navigating to EditSO with items:', items);
               onNavigateToEditSO(items);
             }
           }
@@ -571,7 +602,7 @@ Qty Sistem: ${item.quantity}`,
       />
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   safeArea: {

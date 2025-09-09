@@ -1,6 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { User, UserRole } from '../models/User';
 import { InventoryItem, InventoryTransaction } from '../models/Inventory';
+import { Member } from '../models/Member';
 
 // Open database
 let db: SQLite.SQLiteDatabase | null = null;
@@ -61,6 +62,7 @@ export const initDatabase = async (): Promise<void> => {
         price REAL NOT NULL,
         reason TEXT,
         reference TEXT,
+        memberId TEXT,
         createdAt TEXT NOT NULL,
         createdBy TEXT NOT NULL,
         FOREIGN KEY (itemId) REFERENCES inventory_items (code)
@@ -109,6 +111,22 @@ export const initDatabase = async (): Promise<void> => {
         startTime TEXT NOT NULL,
         lastView TEXT NOT NULL, -- 'partialSO', 'grandSO', or 'editSO'
         items TEXT, -- JSON string of SO items
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    `);
+    
+    // Create members table
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS members (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        phoneNumber TEXT,
+        email TEXT,
+        birthday TEXT,
+        totalPurchases REAL NOT NULL DEFAULT 0,
+        totalPoints INTEGER NOT NULL DEFAULT 0,
+        lastTransaction TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       );
@@ -959,6 +977,214 @@ export const updateSOSessionItems = async (items: string): Promise<void> => {
     );
   } catch (error) {
     console.error('Error updating SO session items:', error);
+    throw error;
+  }
+};
+
+// Member functions
+
+// Create a new member
+export const createMember = async (member: Omit<Member, 'id' | 'totalPurchases' | 'totalPoints' | 'createdAt' | 'updatedAt'>): Promise<Member> => {
+  try {
+    const database = await openDatabase();
+    const id = Math.random().toString(36).substring(2, 15);
+    const timestamp = new Date().toISOString();
+    
+    await database.runAsync(
+      `INSERT INTO members (id, name, phoneNumber, email, birthday, totalPurchases, totalPoints, lastTransaction, createdAt, updatedAt) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [
+        id,
+        member.name,
+        member.phoneNumber || null,
+        member.email || null,
+        member.birthday || null,
+        0, // totalPurchases default to 0
+        0, // totalPoints default to 0
+        null, // lastTransaction default to null
+        timestamp,
+        timestamp
+      ]
+    );
+    
+    return {
+      id,
+      name: member.name,
+      phoneNumber: member.phoneNumber || '',
+      email: member.email || undefined,
+      birthday: member.birthday || undefined,
+      totalPurchases: 0,
+      totalPoints: 0,
+      lastTransaction: undefined,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+  } catch (error) {
+    console.error('Error creating member:', error);
+    throw error;
+  }
+};
+
+// Get all members
+export const getAllMembers = async (): Promise<Member[]> => {
+  try {
+    const database = await openDatabase();
+    const result: any[] = await database.getAllAsync('SELECT * FROM members ORDER BY name;');
+    
+    return result.map((member) => ({
+      id: member.id,
+      name: member.name,
+      phoneNumber: member.phoneNumber || '',
+      email: member.email || undefined,
+      birthday: member.birthday || undefined,
+      totalPurchases: parseFloat(member.totalPurchases),
+      totalPoints: parseInt(member.totalPoints),
+      lastTransaction: member.lastTransaction || undefined,
+      createdAt: member.createdAt,
+      updatedAt: member.updatedAt
+    }));
+  } catch (error) {
+    console.error('Error getting all members:', error);
+    throw error;
+  }
+};
+
+// Update member
+export const updateMember = async (id: string, member: Partial<Omit<Member, 'id' | 'createdAt'>>): Promise<Member> => {
+  try {
+    const database = await openDatabase();
+    const timestamp = new Date().toISOString();
+    
+    // Build dynamic update query
+    const fields = [];
+    const values = [];
+    
+    if (member.name !== undefined) {
+      fields.push('name = ?');
+      values.push(member.name);
+    }
+    if (member.phoneNumber !== undefined) {
+      fields.push('phoneNumber = ?');
+      values.push(member.phoneNumber);
+    }
+    if (member.email !== undefined) {
+      fields.push('email = ?');
+      values.push(member.email);
+    }
+    if (member.birthday !== undefined) {
+      fields.push('birthday = ?');
+      values.push(member.birthday);
+    }
+    if (member.totalPurchases !== undefined) {
+      fields.push('totalPurchases = ?');
+      values.push(member.totalPurchases);
+    }
+    if (member.totalPoints !== undefined) {
+      fields.push('totalPoints = ?');
+      values.push(member.totalPoints);
+    }
+    if (member.lastTransaction !== undefined) {
+      fields.push('lastTransaction = ?');
+      values.push(member.lastTransaction);
+    }
+    
+    fields.push('updatedAt = ?');
+    values.push(timestamp);
+    
+    values.push(id);
+    
+    const query = `UPDATE members SET ${fields.join(', ')} WHERE id = ?;`;
+    
+    await database.runAsync(query, values);
+    
+    // Return updated member
+    const updatedMember: any = await database.getFirstAsync('SELECT * FROM members WHERE id = ?;', [id]);
+    
+    if (!updatedMember) {
+      throw new Error('Member not found');
+    }
+    
+    return {
+      id: updatedMember.id,
+      name: updatedMember.name,
+      phoneNumber: updatedMember.phoneNumber || '',
+      email: updatedMember.email || undefined,
+      birthday: updatedMember.birthday || undefined,
+      totalPurchases: parseFloat(updatedMember.totalPurchases),
+      totalPoints: parseInt(updatedMember.totalPoints),
+      lastTransaction: updatedMember.lastTransaction || undefined,
+      createdAt: updatedMember.createdAt,
+      updatedAt: updatedMember.updatedAt
+    };
+  } catch (error) {
+    console.error('Error updating member:', error);
+    throw error;
+  }
+};
+
+// Delete member
+export const deleteMember = async (id: string): Promise<void> => {
+  try {
+    const database = await openDatabase();
+    await database.runAsync('DELETE FROM members WHERE id = ?;', [id]);
+  } catch (error) {
+    console.error('Error deleting member:', error);
+    throw error;
+  }
+};
+
+// Get member by ID
+export const getMemberById = async (id: string): Promise<Member | null> => {
+  try {
+    const database = await openDatabase();
+    const result: any = await database.getFirstAsync('SELECT * FROM members WHERE id = ?;', [id]);
+    
+    if (result) {
+      return {
+        id: result.id,
+        name: result.name,
+        phoneNumber: result.phoneNumber || '',
+        email: result.email || undefined,
+        birthday: result.birthday || undefined,
+        totalPurchases: parseFloat(result.totalPurchases),
+        totalPoints: parseInt(result.totalPoints),
+        lastTransaction: result.lastTransaction || undefined,
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting member by ID:', error);
+    throw error;
+  }
+};
+
+// Get member by phone number
+export const getMemberByPhoneNumber = async (phoneNumber: string): Promise<Member | null> => {
+  try {
+    const database = await openDatabase();
+    const result: any = await database.getFirstAsync('SELECT * FROM members WHERE phoneNumber = ?;', [phoneNumber]);
+    
+    if (result) {
+      return {
+        id: result.id,
+        name: result.name,
+        phoneNumber: result.phoneNumber || '',
+        email: result.email || undefined,
+        birthday: result.birthday || undefined,
+        totalPurchases: parseFloat(result.totalPurchases),
+        totalPoints: parseInt(result.totalPoints),
+        lastTransaction: result.lastTransaction || undefined,
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting member by phone number:', error);
     throw error;
   }
 };
