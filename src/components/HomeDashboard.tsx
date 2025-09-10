@@ -44,7 +44,7 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
               >
                 <Text style={styles.actionIcon}>💰</Text>
                 <Text style={styles.actionTitle}>Sales</Text>
-                <Text style={styles.actionDescription}>Process transactions</Text>
+                <Text style={styles.actionDescription}>Process transactions (F4)</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
