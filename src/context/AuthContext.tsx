@@ -23,16 +23,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const initializeApp = async () => {
     try {
       setIsLoading(true);
+      console.log('Initializing database...');
       // Initialize database
       await initDatabase();
+      console.log('Database initialized');
       
       // Create default users if they don't exist
+      console.log('Creating default users...');
       await createDefaultUsers();
+      console.log('Default users created');
       
       const users = await getAllUsers();
-    // console.log(`Found ${users.length} users in database`);
+      console.log(`Found ${users.length} users in database`);
       
       setIsLoading(false);
+      console.log('App initialization completed');
     } catch (err) {
       console.error('Error initializing app:', err);
       setError('Failed to initialize application');

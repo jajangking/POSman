@@ -5,7 +5,7 @@ import { User } from '../models/User';
 
 interface HomeDashboardProps {
   user: User;
-  onNavigate: (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'soHistory' | 'monitoring' | 'cashier') => void;
+  onNavigate: (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'soHistory' | 'monitoring' | 'cashier' | 'settings') => void;
   onLogout: () => void;
 }
 
@@ -93,6 +93,17 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
                 <Text style={styles.actionTitle}>Pemantauan</Text>
                 <Text style={styles.actionDescription}>Barang yang perlu dipantau</Text>
               </TouchableOpacity>
+              
+              {user.role === 'admin' && (
+                <TouchableOpacity 
+                  style={styles.actionCard} 
+                  onPress={() => onNavigate('settings')}
+                >
+                  <Text style={styles.actionIcon}>⚙️</Text>
+                  <Text style={styles.actionTitle}>Settings</Text>
+                  <Text style={styles.actionDescription}>Configure app settings</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {user.role === 'admin' && (
@@ -106,6 +117,16 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
                   <View style={styles.adminTextContainer}>
                     <Text style={styles.adminTitle}>User Management</Text>
                     <Text style={styles.adminDescription}>Manage staff and customer accounts</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.adminCard} 
+                  onPress={() => onNavigate('settings')}
+                >
+                  <Text style={styles.adminIcon}>⚙️</Text>
+                  <View style={styles.adminTextContainer}>
+                    <Text style={styles.adminTitle}>Store Settings</Text>
+                    <Text style={styles.adminDescription}>Configure store settings and receipt options</Text>
                   </View>
                 </TouchableOpacity>
               </View>

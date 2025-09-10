@@ -185,23 +185,51 @@ export const saveTransaction = async (
     
     // Save each item as a transaction
     for (const item of items) {
-      await database.runAsync(
-        `INSERT INTO inventory_transactions 
-         (id, itemId, type, quantity, price, reason, reference, memberId, createdAt, createdBy) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          Math.random().toString(36).substring(2, 15),
-          item.code,
-          'out',
-          item.qty,
-          item.price,
-          'Sale',
-          receiptNumber,
-          memberId || null,
-          timestamp,
-          userId
-        ]
+      // Check if memberId column exists
+      const columnsResult: any[] = await database.getAllAsync(
+        "PRAGMA table_info(inventory_transactions);"
       );
+      
+      const hasMemberIdColumn = columnsResult.some(column => column.name === 'memberId');
+      
+      if (hasMemberIdColumn) {
+        // Use the new query with memberId if column exists
+        await database.runAsync(
+          `INSERT INTO inventory_transactions 
+           (id, itemId, type, quantity, price, reason, reference, memberId, createdAt, createdBy) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            Math.random().toString(36).substring(2, 15),
+            item.code,
+            'out',
+            item.qty,
+            item.price,
+            'Sale',
+            receiptNumber,
+            memberId || null,
+            timestamp,
+            userId
+          ]
+        );
+      } else {
+        // Use the old query without memberId if column doesn't exist
+        await database.runAsync(
+          `INSERT INTO inventory_transactions 
+           (id, itemId, type, quantity, price, reason, reference, createdAt, createdBy) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            Math.random().toString(36).substring(2, 15),
+            item.code,
+            'out',
+            item.qty,
+            item.price,
+            'Sale',
+            receiptNumber,
+            timestamp,
+            userId
+          ]
+        );
+      }
       
       // Update inventory quantity
       await database.runAsync(
@@ -214,27 +242,62 @@ export const saveTransaction = async (
     
     // Update member's total purchases and points if member ID is provided
     if (memberId) {
-      // Get current total purchases and points for the member
-      const memberResult: any = await database.getFirstAsync(
-        'SELECT totalPurchases, totalPoints FROM members WHERE id = ?',
-        [memberId]
-      );
-      
-      if (memberResult) {
-        const currentTotal = parseFloat(memberResult.totalPurchases) || 0;
-        const newTotal = currentTotal + total;
-        
-        // Calculate new points balance
-        let currentPoints = parseInt(memberResult.totalPoints) || 0;
-        if (pointsRedeemed && pointsRedeemed > 0) {
-          currentPoints = currentPoints - pointsRedeemed;
-        }
-        
-        // Update member's total purchases, points, and last transaction date
-        await database.runAsync(
-          'UPDATE members SET totalPurchases = ?, totalPoints = ?, lastTransaction = ?, updatedAt = ? WHERE id = ?',
-          [newTotal, currentPoints, timestamp, timestamp, memberId]
+      try {
+        // Check if totalPurchases and totalPoints columns exist in members table
+        const memberColumnsResult: any[] = await database.getAllAsync(
+          "PRAGMA table_info(members);"
         );
+        
+        const hasTotalPurchasesColumn = memberColumnsResult.some(column => column.name === 'totalPurchases');
+        const hasTotalPointsColumn = memberColumnsResult.some(column => column.name === 'totalPoints');
+        
+        // Get current total purchases and points for the member
+        let query = 'SELECT ';
+        if (hasTotalPurchasesColumn && hasTotalPointsColumn) {
+          query += 'totalPurchases, totalPoints';
+        } else if (hasTotalPurchasesColumn) {
+          query += 'totalPurchases';
+        } else if (hasTotalPointsColumn) {
+          query += 'totalPoints';
+        } else {
+          query += 'id'; // Minimal query if neither column exists
+        }
+        query += ' FROM members WHERE id = ?';
+        
+        const memberResult: any = await database.getFirstAsync(query, [memberId]);
+        
+        if (memberResult) {
+          let updateQuery = 'UPDATE members SET ';
+          const updateParams: any[] = [];
+          
+          if (hasTotalPurchasesColumn) {
+            const currentTotal = parseFloat(memberResult.totalPurchases) || 0;
+            const newTotal = currentTotal + total;
+            updateQuery += 'totalPurchases = ?, ';
+            updateParams.push(newTotal);
+          }
+          
+          if (hasTotalPointsColumn) {
+            let currentPoints = parseInt(memberResult.totalPoints) || 0;
+            if (pointsRedeemed && pointsRedeemed > 0) {
+              currentPoints = currentPoints - pointsRedeemed;
+            }
+            updateQuery += 'totalPoints = ?, ';
+            updateParams.push(currentPoints);
+          }
+          
+          // Add lastTransaction and updatedAt
+          updateQuery += 'lastTransaction = ?, updatedAt = ?';
+          updateParams.push(timestamp, timestamp);
+          
+          // Add memberId to params
+          updateParams.push(memberId);
+          
+          await database.runAsync(updateQuery + ' WHERE id = ?', updateParams);
+        }
+      } catch (error) {
+        console.error('Error updating member data:', error);
+        // Continue with transaction even if member update fails
       }
     }
   } catch (error) {

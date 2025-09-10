@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Member } from '../models/Member';
-import { addMember, fetchAllMembers, findMemberByPhone, calculatePointsEarned, redeemPoints } from '../services/MemberService';
+import { addMember, fetchAllMembers, findMemberByPhone, calculatePointsEarned, redeemPoints, removeMember } from '../services/MemberService';
 import { POINTS_CONFIG } from '../utils/pointSystem';
+import { formatRupiah } from '../models/Inventory';
 
 interface MemberManagementScreenProps {
   onBack: () => void;
@@ -15,8 +16,8 @@ const MemberManagementScreen: React.FC<MemberManagementScreenProps> = ({ onBack 
   const [email, setEmail] = useState('');
   const [birthday, setBirthday] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
-  const [pointsPerCurrency, setPointsPerCurrency] = useState(POINTS_CONFIG.POINTS_PER_CURRENCY.toString());
-  const [pointsRedemptionRate, setPointsRedemptionRate] = useState(POINTS_CONFIG.POINTS_REDEMPTION_RATE.toString());
+  const [pointsPerCurrency, setPointsPerCurrency] = useState(POINTS_CONFIG.AMOUNT_SPENT_TO_EARN_POINTS.toString());
+  const [pointsRedemptionRate, setPointsRedemptionRate] = useState(POINTS_CONFIG.POINTS_EARNED_PER_AMOUNT.toString());
 
   // Load members from database
   useEffect(() => {
@@ -75,18 +76,53 @@ const MemberManagementScreen: React.FC<MemberManagementScreenProps> = ({ onBack 
     }
   };
 
+  // Handle delete member with confirmation
+  const handleDeleteMember = (memberId: string, memberName: string) => {
+    Alert.alert(
+      'Confirm Delete',
+      `Are you sure you want to delete member "${memberName}"? This action cannot be undone.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeMember(memberId);
+              setMembers(prevMembers => prevMembers.filter(member => member.id !== memberId));
+              Alert.alert('Success', 'Member deleted successfully');
+            } catch (error) {
+              console.error('Error deleting member:', error);
+              Alert.alert('Error', 'Failed to delete member');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleSavePointSettings = () => {
+    const amountSpent = parseFloat(pointsPerCurrency) || 0;
+    const pointsEarned = parseFloat(pointsRedemptionRate) || 0;
+    
+    if (amountSpent <= 0 || pointsEarned <= 0) {
+      Alert.alert('Error', 'Please enter valid values for both fields');
+      return;
+    }
+    
     // In a real app, this would save the point settings to the database
-    Alert.alert('Success', 'Point settings saved successfully');
+    Alert.alert(
+      'Success', 
+      `Point settings saved successfully!\n\nMembers will earn ${pointsEarned} points for every ${formatRupiah(amountSpent)} spent.`
+    );
   };
 
   // Format currency
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-    }).format(amount);
+    return formatRupiah(amount);
   };
 
   // Format points
@@ -110,23 +146,27 @@ const MemberManagementScreen: React.FC<MemberManagementScreenProps> = ({ onBack 
           <View style={styles.settingsSection}>
             <Text style={styles.sectionTitle}>Point Settings</Text>
             
-            <Text style={styles.settingLabel}>Points per {formatCurrency(10000)} spent</Text>
+            <Text style={styles.settingLabel}>Amount spent to earn points (Rp)</Text>
             <TextInput
               style={styles.settingInput}
-              placeholder="Enter points per 10,000 currency units"
+              placeholder="Enter amount spent to earn points"
               value={pointsPerCurrency}
               onChangeText={setPointsPerCurrency}
               keyboardType="numeric"
             />
             
-            <Text style={styles.settingLabel}>Redemption rate (points per {formatCurrency(10000)})</Text>
+            <Text style={styles.settingLabel}>Points earned per amount spent</Text>
             <TextInput
               style={styles.settingInput}
-              placeholder="Enter redemption rate"
+              placeholder="Enter points earned per amount spent"
               value={pointsRedemptionRate}
               onChangeText={setPointsRedemptionRate}
               keyboardType="numeric"
             />
+            
+            <Text style={styles.settingDescription}>
+              Example: If you want to earn 100 points for every {formatRupiah(10000)} spent, set "Amount spent to earn points" to 10000 and "Points earned per amount spent" to 100.
+            </Text>
             
             <TouchableOpacity style={styles.saveSettingsButton} onPress={handleSavePointSettings}>
               <Text style={styles.saveSettingsButtonText}>Save Settings</Text>
@@ -186,7 +226,15 @@ const MemberManagementScreen: React.FC<MemberManagementScreenProps> = ({ onBack 
             <Text style={styles.sectionTitle}>Member List</Text>
             {members.map((member) => (
               <View key={member.id} style={styles.memberListItem}>
-                <Text style={styles.memberName}>{member.name}</Text>
+                <View style={styles.memberHeader}>
+                  <Text style={styles.memberName}>{member.name}</Text>
+                  <TouchableOpacity 
+                    style={styles.deleteButton} 
+                    onPress={() => handleDeleteMember(member.id, member.name)}
+                  >
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.memberPhone}>{member.phoneNumber}</Text>
                 <Text style={styles.memberDetail}>Total Purchases: {formatCurrency(member.totalPurchases)}</Text>
                 <Text style={styles.memberDetail}>Points: {formatPoints(member.totalPoints)}</Text>
@@ -244,6 +292,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 15,
+    paddingBottom: 20, // Reduce padding to prevent content from being pushed too far down
   },
   settingsSection: {
     backgroundColor: 'white',
@@ -267,6 +316,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 5,
+  },
+  settingDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 15,
+    fontStyle: 'italic',
   },
   settingInput: {
     fontSize: 14,
@@ -352,17 +407,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 1,
+    marginBottom: 40, // Increase margin at the bottom to avoid navbar overlap
   },
   memberListItem: {
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
+  memberHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
   memberName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 5,
   },
   memberPhone: {
     fontSize: 14,
@@ -372,6 +433,19 @@ const styles = StyleSheet.create({
   memberDetail: {
     fontSize: 12,
     color: '#999',
+  },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 6,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   noMembersText: {
     fontSize: 14,

@@ -1,7 +1,15 @@
 # Shortcut F4 untuk Halaman Kasir
 
 ## Deskripsi
-Aplikasi POSman kini mendukung shortcut keyboard F4 untuk membuka halaman kasir secara langsung dari dashboard utama. Fitur ini memungkinkan pengguna untuk dengan cepat mengakses fungsi penjualan tanpa harus mengklik tombol "Sales" terlebih dahulu.
+Aplikasi POSman mendukung shortcut keyboard F4 untuk membuka halaman kasir secara langsung dari dashboard utama. Fitur ini memungkinkan pengguna untuk dengan cepat mengakses fungsi penjualan tanpa harus mengklik tombol "Sales" terlebih dahulu.
+
+## Ketersediaan
+Shortcut F4 tersedia dalam lingkungan berikut:
+- Platform web (dengan keyboard)
+- Aplikasi desktop yang dikompilasi (dengan keyboard)
+- Lingkungan pengembangan (dengan keyboard)
+
+Catatan: Shortcut F4 tidak akan berfungsi di perangkat mobile standar karena keterbatasan akses terhadap event keyboard sistem.
 
 ## Cara Menggunakan
 1. Pastikan Anda berada di halaman dashboard utama (Home Dashboard)

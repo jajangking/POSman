@@ -34,14 +34,29 @@ const ItemListModal: React.FC<ItemListModalProps> = ({ visible, onClose, onSelec
   };
 
   const handleSelectItem = (item: InventoryItem) => {
-    onSelectItem(item);
-    onClose();
+    Alert.alert(
+      'Konfirmasi',
+      `Apakah Anda yakin ingin mengambil barang "${item.name}"?`,
+      [
+        {
+          text: 'Batal',
+          style: 'cancel'
+        },
+        {
+          text: 'Ya',
+          onPress: () => {
+            onSelectItem(item);
+            onClose();
+          }
+        }
+      ]
+    );
   };
 
   const renderItem = ({ item, index }: { item: InventoryItem; index: number }) => (
     <TouchableOpacity 
                       style={styles.itemRow}
-                      onPress={() => onSelectItem(item)}
+                      onPress={() => handleSelectItem(item)}
                     >
       <Text style={styles.itemNumber}>{index + 1}.</Text>
       <View style={styles.itemInfo}>

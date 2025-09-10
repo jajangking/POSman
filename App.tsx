@@ -15,13 +15,12 @@ import MonitoringItemsScreen from './src/components/MonitoringItemsScreen';
 import ItemLogScreen from './src/components/ItemLogScreen';
 import CashierScreen from './src/components/CashierScreen'; // Import CashierScreen
 import CashierPage from './src/components/CashierPage'; // Import CashierPage with F4 shortcut
+import SettingsPage from './src/components/SettingsPage'; // Import SettingsPage
 import MemberManagementScreen from './src/components/MemberManagementScreen'; // Import MemberManagementScreen
 import { User } from './src/models/User';
 import { getSOHistoryById } from './src/services/SOHistoryService';
 import { getCurrentSOSession, upsertSOSession } from './src/services/DatabaseService'; // Import the SO session functions
 import { initializeSampleProducts } from './src/services/DatabaseInitializer'; // Import database initializer
-import { migrateDatabase } from './src/services/DatabaseService'; // Import database migration
-import { keyboardShortcuts } from './src/utils/keyboardShortcuts'; // Import keyboard shortcuts utility
 
 // Main app component wrapped with AuthProvider
 export default function App() {
@@ -36,7 +35,7 @@ export default function App() {
 const AppContent: React.FC = () => {
   const authContext = useAuth();
   const { currentUser, isAuthenticated, login, logout, isLoading } = authContext;
-  const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings'>('home');
   const [soItems, setSoItems] = useState<any[]>([]); // State to hold SO items data
   const [soReportData, setSoReportData] = useState<any>(null); // State to hold SO report data
   const [itemLogData, setItemLogData] = useState<{code: string, name: string} | null>(null); // State to hold item log data
@@ -50,7 +49,6 @@ const AppContent: React.FC = () => {
     const init = async () => {
       try {
         await initializeSampleProducts();
-        await migrateDatabase(); // Run database migration
       } catch (error) {
         console.error('Error initializing sample products:', error);
       }
@@ -60,26 +58,6 @@ const AppContent: React.FC = () => {
       init();
     }
   }, [isLoading]);
-
-  // Handle keyboard shortcuts (F4)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Check if F4 is pressed and we're on the home screen
-      if (keyboardShortcuts.isShortcut(e, keyboardShortcuts.CASHIER_SHORTCUT) && currentView === 'home') {
-        keyboardShortcuts.preventDefault(e);
-        // Navigate to the cashier page with F4 shortcut
-        setCurrentView('cashierPage');
-      }
-    };
-
-    // Add event listener for keydown
-    window.addEventListener('keydown', handleKeyDown);
-    
-    // Clean up the event listener
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [currentView]);
 
   // Handle hardware back button
   useEffect(() => {
@@ -293,17 +271,24 @@ const AppContent: React.FC = () => {
         <CashierScreen 
           onBack={() => handleNavigate('home')}
           onNavigateToMemberManagement={() => handleNavigate('memberManagement')}
+          onNavigateToSettings={() => handleNavigate('settings')}
         />
       )}
       {currentView === 'cashierPage' && (
         <CashierPage 
           onBack={() => handleNavigate('home')}
           onNavigateToMemberManagement={() => handleNavigate('memberManagement')}
+          onNavigateToSettings={() => handleNavigate('settings')}
         />
       )}
       {currentView === 'memberManagement' && (
         <MemberManagementScreen 
           onBack={() => handleNavigate('cashier')}
+        />
+      )}
+      {currentView === 'settings' && (
+        <SettingsPage 
+          onBack={() => handleNavigate('home')}
         />
       )}
     </View>

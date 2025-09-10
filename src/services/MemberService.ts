@@ -69,7 +69,12 @@ export const findMemberByPhone = async (phoneNumber: string): Promise<Member | n
 
 // Calculate points earned from a purchase amount
 export const calculatePointsEarned = (amount: number): number => {
-  return Math.floor(amount * POINTS_CONFIG.POINTS_PER_CURRENCY);
+  // Calculate points based on the new configuration
+  const amountSpent = POINTS_CONFIG.AMOUNT_SPENT_TO_EARN_POINTS;
+  const pointsEarned = POINTS_CONFIG.POINTS_EARNED_PER_AMOUNT;
+  
+  // Calculate points: (amount / amountSpent) * pointsEarned
+  return Math.floor((amount / amountSpent) * pointsEarned);
 };
 
 // Redeem points for a discount
@@ -107,14 +112,49 @@ export const updateMemberPoints = async (memberId: string, purchaseAmount: numbe
     // Calculate points earned from this purchase
     const pointsEarned = calculatePointsEarned(purchaseAmount);
     
-    // Update member's total points
-    const updatedMember = await modifyMember(memberId, {
-      totalPoints: member.totalPoints + pointsEarned
-    });
+    // Update member's total points and purchases
+    // Check if the member object has totalPoints and totalPurchases properties
+    const updateData: Partial<Member> = {};
+    
+    if ('totalPoints' in member) {
+      updateData.totalPoints = member.totalPoints + pointsEarned;
+    }
+    
+    if ('totalPurchases' in member) {
+      updateData.totalPurchases = member.totalPurchases + purchaseAmount;
+    }
+    
+    const updatedMember = await modifyMember(memberId, updateData);
     
     return updatedMember;
   } catch (error) {
     console.error('Error updating member points:', error);
+    throw error;
+  }
+};
+
+// Redeem member points
+export const redeemMemberPoints = async (memberId: string, pointsToRedeem: number): Promise<Member> => {
+  try {
+    // Get current member data
+    const member = await getMemberById(memberId);
+    if (!member) {
+      throw new Error('Member not found');
+    }
+    
+    // Check if member has enough points
+    if (member.totalPoints < pointsToRedeem) {
+      throw new Error('Insufficient points');
+    }
+    
+    // Update member's total points
+    const updatedMember = await modifyMember(memberId, {
+      totalPoints: member.totalPoints - pointsToRedeem
+    });
+    
+    return updatedMember;
+  } catch (error) {
+    console.error('Error redeeming member points:', error);
     throw error;
   }
 };
