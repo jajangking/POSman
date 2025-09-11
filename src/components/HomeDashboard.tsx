@@ -5,7 +5,7 @@ import { User } from '../models/User';
 
 interface HomeDashboardProps {
   user: User;
-  onNavigate: (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'soHistory' | 'monitoring' | 'cashier' | 'settings') => void;
+  onNavigate: (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'soHistory' | 'monitoring' | 'cashier' | 'settings' | 'discount') => void;
   onLogout: () => void;
 }
 
@@ -127,6 +127,16 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
                   <View style={styles.adminTextContainer}>
                     <Text style={styles.adminTitle}>Store Settings</Text>
                     <Text style={styles.adminDescription}>Configure store settings and receipt options</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.adminCard} 
+                  onPress={() => onNavigate('discount')}
+                >
+                  <Text style={styles.adminIcon}>🏷️</Text>
+                  <View style={styles.adminTextContainer}>
+                    <Text style={styles.adminTitle}>Discount Management</Text>
+                    <Text style={styles.adminDescription}>Configure discount rules and settings</Text>
                   </View>
                 </TouchableOpacity>
               </View>

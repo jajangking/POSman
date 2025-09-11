@@ -249,7 +249,7 @@ const ItemLogScreen: React.FC<ItemLogScreenProps> = ({ itemCode, itemName, onBac
                     <Text style={styles.logDescription}>{transaction.description}</Text>
                     <View style={styles.logDetails}>
                       <Text style={styles.logQuantity}>
-                        Qty: {transaction.quantity > 0 ? `+${transaction.quantity}` : transaction.quantity}
+                        Qty: {transaction.type === 'so_plus' || transaction.type === 'purchase' ? `+${transaction.quantity}` : `-${transaction.quantity}`}
                       </Text>
                       <Text style={styles.logPrice}>
                         Rp {Math.abs(transaction.price * transaction.quantity).toLocaleString('id-ID')}

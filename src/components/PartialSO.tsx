@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ScannerModal from './ScannerModal';
 import ItemListModal from './ItemListModal';
 import { fetchInventoryItemByCode, fetchAllInventoryItems } from '../services/InventoryService';
-import { getCurrentSOSession, updateSOSessionItems, deleteSOSession, upsertSOSession } from '../services/DatabaseService';
+import { getCurrentSOSession, updateSOSessionItems, deleteSOSession, upsertSOSession, SOSession } from '../services/DatabaseService';
 import { InventoryItem } from '../models/Inventory';
 
 // Define session storage keys
@@ -452,12 +452,12 @@ const PartialSO: React.FC<PartialSOProps> = ({ onBack, onNavigateToEditSO }) => 
       // Update session to reflect that we're going to editSO
       const sessionData = await getCurrentSOSession();
       if (sessionData) {
-        const updatedSession = {
+        const updatedSession: Omit<SOSession, 'id' | 'createdAt' | 'updatedAt'> = {
           ...sessionData,
-          lastView: 'editSO'
+          lastView: 'partialSO'
         };
         await upsertSOSession(updatedSession);
-        // console.log('Session updated with last view: editSO');
+        // console.log('Session updated with last view: partialSO');
       }
       
       // Save items as draft

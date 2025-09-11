@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, BackHandler } from 'react-native';
 import { formatRupiah } from '../../models/Inventory';
 import { CartItem } from '../../services/CashierService';
+import { DEFAULT_POINTS_CONFIG } from '../../utils/pointSystem';
 
 interface PaymentPageProps {
   cartItems: CartItem[];
   subtotal: number;
   tax: number;
   total: number;
+  pointsToRedeem?: string; // Add this prop
   selectedMember?: {
     id: string;
     name: string;
@@ -22,6 +24,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
   subtotal, 
   tax, 
   total,
+  pointsToRedeem = '0', // Add default value
   selectedMember,
   onPaymentComplete,
   onBack 
@@ -43,7 +46,9 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
   // Calculate discount and tax based on settings
   const discount = discountEnabled ? subtotal * 0.1 : 0; // 10% discount if enabled
   const calculatedTax = taxEnabled ? (subtotal - discount) * (taxPercentage / 100) : 0;
-  const finalTotal = subtotal - discount + calculatedTax;
+  const points = selectedMember ? parseInt(pointsToRedeem) || 0 : 0;
+  const pointsDiscount = points * 1000; // Assuming 1 point = Rp 1000 discount
+  const finalTotal = subtotal - discount - pointsDiscount + calculatedTax;
 
   // Format number with thousands separator
   const formatNumber = (num: string): string => {
@@ -131,7 +136,14 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
     }
     
     // Calculate points
-    const earnedPoints = calculatePointsEarned(finalTotal);
+    const points = selectedMember ? parseInt(pointsToRedeem) || 0 : 0;
+    const pointsDiscount = points * 1000; // Assuming 1 point = Rp 1000 discount
+    const amountAfterPoints = subtotal + pointsDiscount; // Amount before points discount for point calculation
+    const earnedPoints = calculatePointsEarned(amountAfterPoints);
+    setPointsEarned(earnedPoints);
+    // For demo purposes, we'll use a fixed current points value
+    // In a real app, this would come from user data
+    setCurrentPoints(selectedMember ? selectedMember.totalPoints : 0);
     setPointsEarned(earnedPoints);
     // For demo purposes, we'll use a fixed current points value
     // In a real app, this would come from user data
@@ -154,12 +166,25 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
 
   // Auto-set amount paid when payment method changes to non-cash
   useEffect(() => {
+    // Handle hardware back button on Android
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Go back to the cashier screen
+      onBack();
+      // Return true to indicate we've handled the back press
+      return true;
+    });
+    
     if (paymentMethod !== 'cash') {
       // Extract only the numeric value from formatted currency
       const numericValue = finalTotal.toString();
       setAmountPaid(numericValue);
       setChange(0);
     }
+    
+    // Cleanup function
+    return () => {
+      backHandler.remove();
+    };
   }, [paymentMethod, finalTotal]);
 
   // Calculate change when amount paid changes
@@ -176,6 +201,42 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
     }
   }, [amountPaid, finalTotal]);
 
+  // Get suggested payments based on total amount
+  const getSuggestedPayments = (total: number): number[] => {
+    // Common denominations in Indonesia
+    const denominations = [1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000];
+    
+    // Suggested payments
+    const suggestions = new Set<number>();
+    
+    // Exact amount
+    suggestions.add(total);
+    
+    // Add common rounded amounts
+    // Round up to nearest thousand
+    const roundedUp = Math.ceil(total / 1000) * 1000;
+    suggestions.add(roundedUp);
+    
+    // Add common denominations that are >= total
+    for (const denom of denominations) {
+      if (denom >= total && denom <= total * 3) { // Only show denominations up to 3x total
+        suggestions.add(denom);
+      }
+    }
+    
+    // Add specific combinations for common scenarios
+    if (total > 50000 && total <= 65000) {
+      suggestions.add(70000); // 50k + 20k
+    }
+    
+    if (total > 65000 && total <= 80000) {
+      suggestions.add(100000);
+    }
+    
+    // Convert to array, remove duplicates, and sort
+    return Array.from(suggestions).sort((a, b) => a - b).slice(0, 6); // Limit to 6 suggestions
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -186,7 +247,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
         {/* Order Summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Summary</Text>
@@ -276,6 +337,24 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
               <Text style={styles.calculatorIcon}>🔢</Text>
             </TouchableOpacity>
             
+            {/* Suggested Payments */}
+            <View style={styles.suggestedPaymentsContainer}>
+              <Text style={styles.suggestedPaymentsTitle}>Suggested Payments:</Text>
+              <View style={styles.suggestedPayments}>
+                {getSuggestedPayments(finalTotal).map((amount, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.suggestedPaymentButton}
+                    onPress={() => {
+                      setAmountPaid(amount.toString());
+                    }}
+                  >
+                    <Text style={styles.suggestedPaymentText}>{formatRupiah(amount)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            
             <View style={styles.changeContainer}>
               <Text style={styles.changeLabel}>Change</Text>
               <Text style={[styles.changeValue, change < 0 && styles.negativeChange]}>
@@ -293,6 +372,12 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
                 <Text style={styles.calculatorDisplayText}>
                   Rp {amountPaid ? formatNumber(amountPaid) : '0'}
                 </Text>
+              </View>
+              
+              {/* Total Amount Display */}
+              <View style={styles.totalDisplay}>
+                <Text style={styles.totalLabelText}>Total</Text>
+                <Text style={styles.totalValueText}>{formatRupiah(finalTotal)}</Text>
               </View>
               
               {/* Change/Return Amount Display */}
@@ -463,6 +548,13 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
                 </>
               )}
               
+              {selectedMember && points > 0 && (
+                <View style={[styles.detailRow, styles.pointsRow]}>
+                  <Text style={styles.pointsLabel}>Poin Digunakan</Text>
+                  <Text style={styles.pointsValue}>-{points} Poin (-{formatRupiah(pointsDiscount)})</Text>
+                </View>
+              )}
+              
               {selectedMember && (
                 <View style={[styles.detailRow, styles.pointsRow]}>
                   <Text style={styles.pointsLabel}>Poin yang Diperoleh</Text>
@@ -586,6 +678,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
   },
+  discountValue: {
+    color: '#FF3B30',
+  },
   totalRow: {
     borderTopWidth: 1,
     borderTopColor: '#eee',
@@ -648,6 +743,35 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },
+  suggestedPaymentsContainer: {
+    marginTop: 15,
+    padding: 10,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+  },
+  suggestedPaymentsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  suggestedPayments: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  suggestedPaymentButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    margin: 4,
+  },
+  suggestedPaymentText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   changeLabel: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -668,14 +792,16 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end', // Position at the bottom
+    justifyContent: 'center', // Posisi di tengah
     alignItems: 'center',
     zIndex: 1000,
   },
   calculatorModal: {
     backgroundColor: 'white',
-    width: '100%',
-    maxHeight: '50%', // Limit height to 50% of screen
+    width: '80%',
+    maxWidth: 400,
+    borderRadius: 10,
+    maxHeight: '80%',
   },
   calculatorDisplay: {
     padding: 20,
@@ -688,6 +814,25 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     color: '#333',
+  },
+  totalDisplay: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#e0f7fa',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  totalLabelText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  totalValueText: {
+    fontSize: 20,
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
   changeDisplay: {
     flexDirection: 'row',
@@ -707,9 +852,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#007AFF',
     fontWeight: 'bold',
-  },
-  negativeChange: {
-    color: '#FF3B30',
   },
   calculatorButtons: {
     flexDirection: 'column',
@@ -792,16 +934,6 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     marginTop: 10,
-  },
-  changeLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  changeValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#007AFF',
   },
   pointsRow: {
     backgroundColor: '#fff8e8',

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getCurrentSOSession, upsertSOSession, deleteSOSession } from '../services/DatabaseService';
+import { getCurrentSOSession, upsertSOSession, deleteSOSession, SOSession } from '../services/DatabaseService';
 
 interface StockOpnameProps {
   onBack?: () => void;
@@ -78,12 +78,11 @@ const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, 
           {
             text: 'Minimalkan',
             onPress: async () => {
-              // If we have a selected SO type but no saved session yet, save it
               if (selectedSOType && !savedSession) {
-                const sessionData = {
+                const sessionData: Omit<SOSession, 'id' | 'createdAt' | 'updatedAt'> = {
                   type: selectedSOType,
                   startTime: new Date().toISOString(),
-                  lastView: selectedSOType === 'partial' ? 'partialSO' : 'editSO',
+                  lastView: selectedSOType === 'partial' ? 'partialSO' : 'grandSO',
                   items: ''
                 };
                 
@@ -155,7 +154,7 @@ const StockOpname = React.forwardRef(({ onBack, onNavigate }: StockOpnameProps, 
       }
       
       // Save new session data
-      const sessionData = {
+      const sessionData: Omit<SOSession, 'id' | 'createdAt' | 'updatedAt'> = {
         type: selectedSOType,
         startTime: new Date().toISOString(),
         lastView: selectedSOType === 'partial' ? 'partialSO' : 'grandSO', // Arahkan ke grandSO untuk Grand SO
@@ -325,11 +324,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#007AFF',
     fontWeight: '600',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
   },
   title: {
     fontSize: 20,

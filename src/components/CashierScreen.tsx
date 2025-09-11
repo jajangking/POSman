@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Modal, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { searchProducts, getProductByCode, generateReceiptNumber, saveTransaction, CartItem, getAllActiveProducts } from '../services/CashierService';
 import { findMemberByPhone, redeemPoints, calculatePointsEarned, updateMemberPoints } from '../services/MemberService';
 import { Member } from '../models/Member';
-import { POINTS_CONFIG } from '../utils/pointSystem';
+import { DEFAULT_POINTS_CONFIG } from '../utils/pointSystem';
 import { InventoryItem, formatRupiah } from '../models/Inventory';
 import ScannerModal from './ScannerModal';
 import ItemListModal from './ItemListModal';
@@ -51,13 +52,77 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
     name: 'TOKO POSman',
     address: 'Jl. Contoh No. 123, Jakarta',
     phone: '(021) 123-4567',
-    paperSize: '80mm' as '80mm' | '58mm' // Default paper size
+    paperSize: '80mm' as '80mm' | '58mm', // Default paper size
+    footerMessage: 'Terima kasih telah berbelanja di toko kami!'
   }); // State for store settings
   const [paymentDetails, setPaymentDetails] = useState({
     paymentMethod: 'cash',
     amountPaid: 0,
     change: 0
   }); // State for payment details
+  
+  // Transaction session key for AsyncStorage
+  const TRANSACTION_SESSION_KEY = 'cashier_transaction_session';
+  
+  // Save transaction session to AsyncStorage
+  const saveTransactionSession = async () => {
+    try {
+      const sessionData = {
+        cartItems,
+        selectedMember,
+        memberNumber,
+        pointsToRedeem,
+        receiptNumber
+      };
+      await AsyncStorage.setItem(TRANSACTION_SESSION_KEY, JSON.stringify(sessionData));
+    } catch (error) {
+      console.error('Error saving transaction session:', error);
+    }
+  };
+  
+  // Load transaction session from AsyncStorage
+  const loadTransactionSession = async () => {
+    try {
+      const sessionData = await AsyncStorage.getItem(TRANSACTION_SESSION_KEY);
+      if (sessionData) {
+        const parsedData = JSON.parse(sessionData);
+        setCartItems(parsedData.cartItems || []);
+        setSelectedMember(parsedData.selectedMember || null);
+        setMemberNumber(parsedData.memberNumber || '');
+        setPointsToRedeem(parsedData.pointsToRedeem || '0');
+        setReceiptNumber(parsedData.receiptNumber || receiptNumber);
+        
+        // Show alert that session was restored
+        Alert.alert(
+          'Sesi Dipulihkan', 
+          'Transaksi sebelumnya telah dipulihkan.'
+        );
+      }
+    } catch (error) {
+      console.error('Error loading transaction session:', error);
+    }
+  };
+  
+  // Clear transaction session from AsyncStorage
+  const clearTransactionSession = async () => {
+    try {
+      await AsyncStorage.removeItem(TRANSACTION_SESSION_KEY);
+    } catch (error) {
+      console.error('Error clearing transaction session:', error);
+    }
+  };
+  
+  // Save session when cart items, member, or points change
+  useEffect(() => {
+    if (cartItems.length > 0 || selectedMember || pointsToRedeem !== '0') {
+      saveTransactionSession();
+    }
+  }, [cartItems, selectedMember, memberNumber, pointsToRedeem]);
+  
+  // Load session on component mount
+  useEffect(() => {
+    loadTransactionSession();
+  }, []);
   
   const [receiptCartItems, setReceiptCartItems] = useState<CartItem[]>([]); // State for cart items on receipt page
   const [receiptMember, setReceiptMember] = useState<Member | null>(null); // State for member on receipt page
@@ -73,6 +138,70 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
       setCurrentTime(new Date());
     }, 1000);
     
+    // Handle hardware back button on Android
+  const backHandler = BackHandler.addEventListener('hardwareBackPress', async () => {
+    // If we're on the payment page, go back to the cashier screen
+    if (showPaymentPage) {
+      setShowPaymentPage(false);
+      return true;
+    }
+    
+    // If we're on the receipt page, go back to the cashier screen
+    if (showReceiptPage) {
+      setShowReceiptPage(false);
+      return true;
+    }
+    
+    // If there's no active transaction (no items in cart and no member selected), 
+    // go directly to dashboard without confirmation
+    if (cartItems.length === 0 && !selectedMember) {
+      // Save session before leaving (in case there's any data to save)
+      await saveTransactionSession();
+      onBack();
+      return true;
+    }
+    
+    // If there's an active transaction (cart has items or member selected), 
+    // ask user what to do with it
+    Alert.alert(
+      'Transaksi Belum Selesai',
+      'Anda memiliki transaksi yang belum diselesaikan. Apa yang ingin Anda lakukan?',
+      [
+        {
+          text: 'Lanjutkan Transaksi',
+          style: 'cancel'
+        },
+        {
+          text: 'Simpan Sementara & Keluar',
+          onPress: async () => {
+            // Save current session before leaving
+            await saveTransactionSession();
+            // Call the original onBack function
+            onBack();
+          }
+        },
+        {
+          text: 'Hapus & Keluar',
+          onPress: async () => {
+            // Clear current session
+            await clearTransactionSession();
+            // Clear cart and member for new transaction
+            setCartItems([]);
+            setSelectedMember(null);
+            setMemberNumber('');
+            setPointsToRedeem('0');
+            // Call the original onBack function
+            onBack();
+          },
+          style: 'destructive'
+        }
+      ]
+    );
+    
+    // Return true to indicate we've handled the back press
+    return true;
+  });
+    
     // Load store settings from database
   const loadStoreSettings = async () => {
     try {
@@ -81,7 +210,8 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
         name: 'TOKO POSman',
         address: 'Jl. Contoh No. 123, Jakarta',
         phone: '(021) 123-4567',
-        paperSize: '80mm'
+        paperSize: '80mm',
+        footerMessage: 'Terima kasih telah berbelanja di toko kami!'
       });
     } catch (error) {
       console.error('Error loading store settings:', error);
@@ -110,7 +240,14 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
     
     generateReceipt();
     
-    return () => clearInterval(timer);
+    // Load transaction session
+    loadTransactionSession();
+    
+    // Cleanup function
+    return () => {
+      clearInterval(timer);
+      backHandler.remove();
+    };
   }, [currentUser]);
 
   // Format currency
@@ -377,7 +514,7 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
       
       // Calculate points to redeem
       const points = parseInt(pointsToRedeem) || 0;
-      const pointsDiscount = redeemPoints(points);
+      const pointsDiscount = points * 1000; // Assuming 1 point = Rp 1000 discount
       
       const total = subtotal + tax - pointsDiscount;
       
@@ -435,6 +572,9 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
         setSelectedMember(null);
         setMemberNumber('');
         setPointsToRedeem('0');
+        
+        // Clear transaction session
+        await clearTransactionSession();
       }
     } catch (error) {
       console.error('Error saving transaction:', error);
@@ -447,8 +587,8 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
     // In a real app, this would connect to a printer
     Alert.alert('Cetak Struk', 'Fungsi pencetakan struk akan diimplementasikan di sini.');
   };
-
-  // Handle new transaction
+      // Generate new receipt number
+      // Handle new transaction
   const handleNewTransaction = async () => {
     try {
       // Generate new receipt number
@@ -468,6 +608,9 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
       setReceiptSubtotal(0);
       setReceiptTax(0);
       setReceiptTotal(0);
+      
+      // Clear transaction session
+      await clearTransactionSession();
     } catch (error) {
       console.error('Error generating new receipt number:', error);
       // Use fallback receipt number
@@ -487,6 +630,9 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
       setReceiptSubtotal(0);
       setReceiptTax(0);
       setReceiptTotal(0);
+      
+      // Clear transaction session
+      await clearTransactionSession();
     }
   };
 
@@ -511,9 +657,13 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
   const taxEnabled = true; // This would come from app settings
   const taxPercentage = 10; // This would come from app settings (10%)
   
+  // Calculate points discount
+  const points = parseInt(pointsToRedeem) || 0;
+  const pointsDiscount = points * 1000; // Assuming 1 point = Rp 1000 discount
+  
   const discount = discountEnabled ? subtotal * 0.1 : 0; // 10% discount if enabled
-  const tax = taxEnabled ? (subtotal - discount) * (taxPercentage / 100) : 0;
-  const total = subtotal - discount + tax;
+  const tax = taxEnabled ? (subtotal - discount - pointsDiscount) * (taxPercentage / 100) : 0;
+  const total = subtotal - discount - pointsDiscount + tax;
 
   return (
     <>
@@ -522,7 +672,53 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
           {!showPaymentPage && !showReceiptPage && (
             <>
               <View style={styles.header}>
-                <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                <TouchableOpacity style={styles.backButton} onPress={async () => {
+                  // If there's no active transaction (no items in cart and no member selected), 
+                  // go directly to dashboard without confirmation
+                  if (cartItems.length === 0 && !selectedMember) {
+                    // Save session before leaving (in case there's any data to save)
+                    await saveTransactionSession();
+                    onBack();
+                    return;
+                  }
+                  
+                  // If there's an active transaction (cart has items or member selected), 
+                  // ask user what to do with it
+                  Alert.alert(
+                    'Transaksi Belum Selesai',
+                    'Anda memiliki transaksi yang belum diselesaikan. Apa yang ingin Anda lakukan?',
+                    [
+                      {
+                        text: 'Lanjutkan Transaksi',
+                        style: 'cancel'
+                      },
+                      {
+                        text: 'Simpan Sementara & Keluar',
+                        onPress: async () => {
+                          // Save current session before leaving
+                          await saveTransactionSession();
+                          // Call the original onBack function
+                          onBack();
+                        }
+                      },
+                      {
+                        text: 'Hapus & Keluar',
+                        onPress: async () => {
+                          // Clear current session
+                          await clearTransactionSession();
+                          // Clear cart and member for new transaction
+                          setCartItems([]);
+                          setSelectedMember(null);
+                          setMemberNumber('');
+                          setPointsToRedeem('0');
+                          // Call the original onBack function
+                          onBack();
+                        },
+                        style: 'destructive'
+                      }
+                    ]
+                  );
+                }}>
                   <Text style={styles.backButtonText}>← Back</Text>
                 </TouchableOpacity>
                 <Text style={styles.title}>Cashier</Text>
@@ -592,6 +788,7 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
               subtotal={subtotal}
               tax={tax}
               total={total}
+              pointsToRedeem={pointsToRedeem} // Add this prop
               selectedMember={selectedMember}
               onPaymentComplete={handlePaymentComplete}
               onBack={() => setShowPaymentPage(false)}

@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Member } from '../models/Member';
 import { addMember, fetchAllMembers, findMemberByPhone, calculatePointsEarned, redeemPoints, removeMember } from '../services/MemberService';
-import { POINTS_CONFIG } from '../utils/pointSystem';
+import { DEFAULT_POINTS_CONFIG } from '../utils/pointSystem';
+import { savePointSettings, getPointSettings } from '../services/DatabaseService';
 import { formatRupiah } from '../models/Inventory';
 
 interface MemberManagementScreenProps {
@@ -16,12 +17,29 @@ const MemberManagementScreen: React.FC<MemberManagementScreenProps> = ({ onBack 
   const [email, setEmail] = useState('');
   const [birthday, setBirthday] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
-  const [pointsPerCurrency, setPointsPerCurrency] = useState(POINTS_CONFIG.AMOUNT_SPENT_TO_EARN_POINTS.toString());
-  const [pointsRedemptionRate, setPointsRedemptionRate] = useState(POINTS_CONFIG.POINTS_EARNED_PER_AMOUNT.toString());
+  const [pointsPerCurrency, setPointsPerCurrency] = useState(DEFAULT_POINTS_CONFIG.AMOUNT_SPENT_TO_EARN_POINTS.toString());
+  const [pointsRedemptionRate, setPointsRedemptionRate] = useState(DEFAULT_POINTS_CONFIG.POINTS_EARNED_PER_AMOUNT.toString());
 
   // Load members from database
   useEffect(() => {
     loadMembers();
+  }, []);
+
+  // Load point settings on component mount
+  useEffect(() => {
+    const loadPointSettings = async () => {
+      try {
+        const settings = await getPointSettings();
+        if (settings) {
+          setPointsPerCurrency(settings.amountSpentToEarnPoints.toString());
+          setPointsRedemptionRate(settings.pointsEarnedPerAmount.toString());
+        }
+      } catch (error) {
+        console.error('Error loading point settings:', error);
+      }
+    };
+    
+    loadPointSettings();
   }, []);
 
   const loadMembers = async () => {
@@ -104,31 +122,35 @@ const MemberManagementScreen: React.FC<MemberManagementScreenProps> = ({ onBack 
     );
   };
 
-  const handleSavePointSettings = () => {
-    const amountSpent = parseFloat(pointsPerCurrency) || 0;
-    const pointsEarned = parseFloat(pointsRedemptionRate) || 0;
-    
-    if (amountSpent <= 0 || pointsEarned <= 0) {
-      Alert.alert('Error', 'Please enter valid values for both fields');
-      return;
-    }
-    
-    // In a real app, this would save the point settings to the database
-    Alert.alert(
-      'Success', 
-      `Point settings saved successfully!\n\nMembers will earn ${pointsEarned} points for every ${formatRupiah(amountSpent)} spent.`
-    );
-  };
+  const handleSavePointSettings = async () => {\n    const amountSpent = parseFloat(pointsPerCurrency) || 0;\n    const pointsEarned = parseFloat(pointsRedemptionRate) || 0;\n    \n    if (amountSpent <= 0 || pointsEarned <= 0) {\n      Alert.alert('Error', 'Please enter valid values for both fields');\n      return;\n    }\n    \n    try {\n      // Save the point settings to the database\n      await savePointSettings({
+        amountSpentToEarnPoints: amountSpent,
+        pointsEarnedPerAmount: pointsEarned,
+        pointsRedemptionRate: DEFAULT_POINTS_CONFIG.POINTS_REDEMPTION_RATE,
+        minPointsForRedemption: DEFAULT_POINTS_CONFIG.MIN_POINTS_FOR_REDEMPTION,
+        maxPointsRedemption: DEFAULT_POINTS_CONFIG.MAX_POINTS_REDEMPTION
+      });\n      \n      Alert.alert(\n        'Success', \n        `Point settings saved successfully!\\n\\nMembers will earn ${pointsEarned} points for every ${formatRupiah(amountSpent)} spent.`\n      );\n    } catch (error) {\n      console.error('Error saving point settings:', error);\n      Alert.alert('Error', 'Failed to save point settings. Please try again.');\n    }\n  };
 
   // Format currency
   const formatCurrency = (amount: number) => {
     return formatRupiah(amount);
   };
 
-  // Format points
-  const formatPoints = (points: number) => {
-    return new Intl.NumberFormat('id-ID').format(points);
-  };
+  // Load point settings on component mount
+  useEffect(() => {
+    const loadPointSettings = async () => {
+      try {
+        const settings = await getPointSettings();
+        if (settings) {
+          setPointsPerCurrency(settings.amountSpentToEarnPoints.toString());
+          setPointsRedemptionRate(settings.pointsEarnedPerAmount.toString());
+        }
+      } catch (error) {
+        console.error('Error loading point settings:', error);
+      }
+    };
+    
+    loadPointSettings();
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>

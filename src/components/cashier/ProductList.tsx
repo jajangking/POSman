@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView } from 'react-native';
 import { CartItem } from '../../services/CashierService';
 
 interface ProductListProps {
@@ -23,25 +23,27 @@ const ProductList: React.FC<ProductListProps> = ({
         <Text style={[styles.tableCell, styles.priceColumn]}>Price</Text>
       </View>
       
-      {cartItems.map((item, index) => (
-        <View key={item.id} style={styles.tableRow}>
-          <Text style={[styles.tableCell, styles.noColumn]}>{index + 1}</Text>
-          <Text style={[styles.tableCell, styles.codeColumn]}>{item.code}</Text>
-          <Text style={[styles.tableCell, styles.nameColumn]}>{item.name}</Text>
-          <TextInput
-            style={[styles.tableCell, styles.qtyColumn, styles.qtyInput]}
-            value={item.qty.toString()}
-            onChangeText={(text) => {
-              const newQty = parseInt(text) || 0;
-              const updatedItems = [...cartItems];
-              updatedItems[index] = { ...item, qty: newQty, subtotal: newQty * item.price };
-              setCartItems(updatedItems);
-            }}
-            keyboardType="numeric"
-          />
-          <Text style={[styles.tableCell, styles.priceColumn]}>{formatCurrency(item.subtotal)}</Text>
-        </View>
-      ))}
+      <ScrollView style={styles.tableBody}>
+        {cartItems.map((item, index) => (
+          <View key={item.id} style={styles.tableRow}>
+            <Text style={[styles.tableCell, styles.noColumn]}>{index + 1}</Text>
+            <Text style={[styles.tableCell, styles.codeColumn]}>{item.code}</Text>
+            <Text style={[styles.tableCell, styles.nameColumn]}>{item.name}</Text>
+            <TextInput
+              style={[styles.tableCell, styles.qtyColumn, styles.qtyInput]}
+              value={item.qty.toString()}
+              onChangeText={(text) => {
+                const newQty = parseInt(text) || 0;
+                const updatedItems = [...cartItems];
+                updatedItems[index] = { ...item, qty: newQty, subtotal: newQty * item.price };
+                setCartItems(updatedItems);
+              }}
+              keyboardType="numeric"
+            />
+            <Text style={[styles.tableCell, styles.priceColumn]}>{formatCurrency(item.subtotal)}</Text>
+          </View>
+        ))}
+      </ScrollView>
     </View>
   );
 };
@@ -57,6 +59,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#ddd',
+  },
+  tableBody: {
+    flex: 1,
   },
   tableRow: {
     flexDirection: 'row',

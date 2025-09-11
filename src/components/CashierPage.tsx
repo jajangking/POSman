@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Modal } from 'react-native';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Modal, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { searchProducts, getProductByCode, generateReceiptNumber, saveTransaction, CartItem, getAllActiveProducts } from '../services/CashierService';
 import { findMemberByPhone, redeemPoints, calculatePointsEarned, updateMemberPoints } from '../services/MemberService';
 import { Member } from '../models/Member';
-import { POINTS_CONFIG } from '../utils/pointSystem';
+import { DEFAULT_POINTS_CONFIG } from '../utils/pointSystem';
 import { InventoryItem, formatRupiah } from '../models/Inventory';
 import ScannerModal from './ScannerModal';
 import ItemListModal from './ItemListModal';
@@ -51,7 +52,8 @@ const CashierPage: React.FC<CashierPageProps> = ({ onBack, onNavigateToMemberMan
     name: 'TOKO POSman',
     address: 'Jl. Contoh No. 123, Jakarta',
     phone: '(021) 123-4567',
-    paperSize: '80mm' as '80mm' | '58mm' // Default paper size
+    paperSize: '80mm' as '80mm' | '58mm', // Default paper size
+    footerMessage: 'Terima kasih telah berbelanja di toko kami!'
   }); // State for store settings
   const [paymentDetails, setPaymentDetails] = useState({
     paymentMethod: 'cash',
@@ -81,7 +83,8 @@ const CashierPage: React.FC<CashierPageProps> = ({ onBack, onNavigateToMemberMan
         name: 'TOKO POSman',
         address: 'Jl. Contoh No. 123, Jakarta',
         phone: '(021) 123-4567',
-        paperSize: '80mm'
+        paperSize: '80mm',
+        footerMessage: 'Terima kasih telah berbelanja di toko kami!'
       });
     } catch (error) {
       console.error('Error loading store settings:', error);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, BackHandler } from 'react-native';
 import { formatRupiah } from '../../models/Inventory';
 import { CartItem } from '../../services/CashierService';
 
@@ -18,6 +18,13 @@ interface ReceiptPageProps {
   memberName?: string;
   discount?: number;
   pointsRedeemed?: number;
+  storeSettings?: {
+    name: string;
+    address: string;
+    phone: string;
+    paperSize: '80mm' | '58mm';
+    footerMessage: string;
+  };
   onPrint: () => void;
   onNewTransaction: () => void;
 }
@@ -35,12 +42,13 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
   currentPoints,
   newPointsBalance,
   memberName,
-  discount,
+  discount = 0, // Add default value
   pointsRedeemed,
+  storeSettings,
   onPrint,
   onNewTransaction
 }) => {
-  const [storeSettings, setStoreSettings] = useState({
+  const [localStoreSettings, setLocalStoreSettings] = useState({
     name: 'TOKO POSman',
     address: 'Jl. Contoh No. 123, Jakarta',
     phone: '(021) 123-4567',
@@ -48,7 +56,24 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
     footerMessage: 'Terima kasih telah berbelanja di toko kami!'
   });
 
-  // For now, we're not loading settings from database since getStoreSettings is not available
+  useEffect(() => {
+    if (storeSettings) {
+      setLocalStoreSettings(storeSettings);
+    }
+    
+    // Handle hardware back button on Android
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Go back to the cashier screen
+      onNewTransaction();
+      // Return true to indicate we've handled the back press
+      return true;
+    });
+    
+    // Cleanup function
+    return () => {
+      backHandler.remove();
+    };
+  }, [storeSettings]);
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('id-ID', {
@@ -61,10 +86,14 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
     });
   };
 
-  const paymentMethodLabels: { [key: string]: string } = {
-    cash: 'Tunai',
-    card: 'Kartu',
-    ewallet: 'E-Wallet'
+  // Payment method labels
+  const getPaymentMethodLabel = (method: string): string => {
+    switch (method) {
+      case 'cash': return 'Tunai';
+      case 'card': return 'Kartu';
+      case 'ewallet': return 'E-Wallet';
+      default: return method;
+    }
   };
 
   return (
@@ -72,9 +101,9 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
       <ScrollView style={styles.content}>
         {/* Receipt Header */}
         <View style={styles.receiptHeader}>
-          <Text style={styles.storeName}>{storeSettings.name}</Text>
-          <Text style={styles.storeAddress}>{storeSettings.address}</Text>
-          <Text style={styles.storePhone}>Telp: {storeSettings.phone}</Text>
+          <Text style={styles.storeName}>{localStoreSettings.name}</Text>
+          <Text style={styles.storeAddress}>{localStoreSettings.address}</Text>
+          <Text style={styles.storePhone}>Telp: {localStoreSettings.phone}</Text>
         </View>
 
         {/* Transaction Info */}
@@ -102,20 +131,22 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
             <Text style={[styles.itemsHeaderColumn, styles.itemSubtotalHeader]}>Subtotal</Text>
           </View>
           <View style={styles.divider} />
-          {cartItems && cartItems.length > 0 ? (
-            cartItems.map((item, index) => (
-              <View key={item.id} style={styles.itemRow}>
-                <Text style={[styles.itemColumn, styles.itemNameColumn]} numberOfLines={2}>{item.name}</Text>
-                <Text style={[styles.itemColumn, styles.itemQtyColumn]}>{item.qty}</Text>
-                <Text style={[styles.itemColumn, styles.itemPriceColumn]}>{formatRupiah(item.price)}</Text>
-                <Text style={[styles.itemColumn, styles.itemSubtotalColumn]}>{formatRupiah(item.subtotal)}</Text>
+          <View style={styles.itemsContainer}>
+            {cartItems && cartItems.length > 0 ? (
+              cartItems.map((item, index) => (
+                <View key={item.id} style={styles.itemRow}>
+                  <Text style={[styles.itemColumn, styles.itemNameColumn]} numberOfLines={2}>{item.name}</Text>
+                  <Text style={[styles.itemColumn, styles.itemQtyColumn]}>{item.qty}</Text>
+                  <Text style={[styles.itemColumn, styles.itemPriceColumn]}>{formatRupiah(item.price)}</Text>
+                  <Text style={[styles.itemColumn, styles.itemSubtotalColumn]}>{formatRupiah(item.subtotal)}</Text>
+                </View>
+              ))
+            ) : (
+              <View style={styles.itemRow}>
+                <Text style={[styles.itemColumn, styles.itemNameColumn]}>Tidak ada item</Text>
               </View>
-            ))
-          ) : (
-            <View style={styles.itemRow}>
-              <Text style={[styles.itemColumn, styles.itemNameColumn]}>Tidak ada item</Text>
-            </View>
-          )}
+            )}
+          </View>
         </View>
 
         {/* Payment Details */}
@@ -128,19 +159,19 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
             <Text style={styles.detailLabel}>PPN (10%)</Text>
             <Text style={styles.detailValue}>{formatRupiah(tax)}</Text>
           </View>
-          {discount && discount > 0 && (
+          {discount && discount > 0 ? (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Diskon</Text>
               <Text style={styles.detailValue}>-{formatRupiah(discount)}</Text>
             </View>
-          )}
+          ) : null}
           <View style={[styles.detailRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{formatRupiah(total)}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Metode Bayar</Text>
-            <Text style={styles.detailValue}>{paymentMethodLabels[paymentMethod]}</Text>
+            <Text style={styles.detailValue}>{getPaymentMethodLabel(paymentMethod)}</Text>
           </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Jumlah Bayar</Text>
@@ -186,7 +217,7 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
         {/* Receipt Footer */}
         <View style={styles.receiptFooter}>
           <Text style={styles.thankYou}>TERIMA KASIH</Text>
-          <Text style={styles.footerText}>{storeSettings.footerMessage}</Text>
+          <Text style={styles.footerText}>{storeSettings?.footerMessage || localStoreSettings.footerMessage}</Text>
         </View>
       </ScrollView>
 
@@ -266,6 +297,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 1,
+  },
+  itemsContainer: {
+    maxHeight: 300,
+    overflow: 'scroll',
   },
   itemsHeader: {
     flexDirection: 'row',

@@ -1,6 +1,6 @@
 import { Member } from '../models/Member';
 import { createMember, getAllMembers, updateMember, deleteMember, getMemberById, getMemberByPhoneNumber } from './DatabaseService';
-import { POINTS_CONFIG } from '../utils/pointSystem';
+import { DEFAULT_POINTS_CONFIG } from '../utils/pointSystem';
 
 // Create a new member
 export const addMember = async (memberData: Omit<Member, 'id' | 'totalPurchases' | 'totalPoints' | 'createdAt' | 'updatedAt'>): Promise<Member> => {
@@ -67,34 +67,28 @@ export const findMemberByPhone = async (phoneNumber: string): Promise<Member | n
   }
 };
 
-// Calculate points earned from a purchase amount
+// Calculate points based on the new configuration
+const amountSpent = DEFAULT_POINTS_CONFIG.AMOUNT_SPENT_TO_EARN_POINTS;
+const pointsEarned = DEFAULT_POINTS_CONFIG.POINTS_EARNED_PER_AMOUNT;
+
+// Calculate points earned (1 point per Rp 1000 spent by default)
 export const calculatePointsEarned = (amount: number): number => {
-  // Calculate points based on the new configuration
-  const amountSpent = POINTS_CONFIG.AMOUNT_SPENT_TO_EARN_POINTS;
-  const pointsEarned = POINTS_CONFIG.POINTS_EARNED_PER_AMOUNT;
-  
-  // Calculate points: (amount / amountSpent) * pointsEarned
-  return Math.floor((amount / amountSpent) * pointsEarned);
+  // Calculate points based on the ratio defined in configuration
+  const points = (amount / amountSpent) * pointsEarned;
+  return Math.floor(points);
 };
 
-// Redeem points for a discount
-export const redeemPoints = (points: number, maxRedemptionAmount?: number): number => {
-  // Ensure points meet minimum requirement
-  if (points < POINTS_CONFIG.MIN_POINTS_FOR_REDEMPTION) {
-    return 0;
+// Redeem points (1 point = Rp 1000 by default)
+export const redeemPoints = (points: number): number => {
+  if (points < DEFAULT_POINTS_CONFIG.MIN_POINTS_FOR_REDEMPTION) {
+    throw new Error(`Minimum ${DEFAULT_POINTS_CONFIG.MIN_POINTS_FOR_REDEMPTION} points required for redemption`);
   }
   
-  // Calculate redemption amount
-  let redemptionAmount = points * POINTS_CONFIG.POINTS_REDEMPTION_RATE;
+  let redemptionAmount = points * DEFAULT_POINTS_CONFIG.POINTS_REDEMPTION_RATE;
   
-  // Apply maximum redemption limit if specified
-  if (maxRedemptionAmount && redemptionAmount > maxRedemptionAmount) {
-    redemptionAmount = maxRedemptionAmount;
-  }
-  
-  // Apply system-wide maximum redemption limit
-  if (redemptionAmount > POINTS_CONFIG.MAX_POINTS_REDEMPTION) {
-    redemptionAmount = POINTS_CONFIG.MAX_POINTS_REDEMPTION;
+  // Ensure redemption amount doesn't exceed maximum allowed
+  if (redemptionAmount > DEFAULT_POINTS_CONFIG.MAX_POINTS_REDEMPTION) {
+    redemptionAmount = DEFAULT_POINTS_CONFIG.MAX_POINTS_REDEMPTION;
   }
   
   return redemptionAmount;

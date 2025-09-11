@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, FlatList, Alert, Keyboard, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchInventoryItemByCode, modifyInventoryItem } from '../services/InventoryService';
-import { getCurrentSOSession, updateSOSessionItems, deleteSOSession, upsertSOSession } from '../services/DatabaseService';
+import { getCurrentSOSession, updateSOSessionItems, deleteSOSession, upsertSOSession, SOSession } from '../services/DatabaseService';
 import { createSOHistory } from '../services/SOHistoryService';
 
 // Define the SOItem interface to match the PartialSO component
@@ -450,9 +450,10 @@ Total item dengan selisih: ${mismatchedItems.length}`,
                 // console.log('SO History ID:', soHistoryId);
               } catch (error) {
                 console.error('Error saving SO history:', error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
                 Alert.alert(
                   'Error',
-                  'Terjadi kesalahan saat menyimpan riwayat SO: ' + (error.message || 'Unknown error')
+                  'Terjadi kesalahan saat menyimpan riwayat SO: ' + errorMessage
                 );
                 // Don't block the main flow if history saving fails
               }
@@ -490,9 +491,10 @@ Total item dengan selisih: ${mismatchedItems.length}`,
                 await deleteSOSession();
               } catch (error) {
                 console.error('Error clearing SO session:', error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
                 Alert.alert(
                   'Error',
-                  'Terjadi kesalahan saat menghapus sesi SO: ' + (error.message || 'Unknown error')
+                  'Terjadi kesalahan saat menghapus sesi SO: ' + errorMessage
                 );
               }
             } catch (error) {
@@ -517,10 +519,9 @@ Total item dengan selisih: ${mismatchedItems.length}`,
       const itemsJson = JSON.stringify(soItems);
       await updateSOSessionItems(itemsJson);
       
-      // Update session to reflect that we're still in editSO
       const sessionData = await getCurrentSOSession();
       if (sessionData) {
-        const updatedSession = {
+        const updatedSession: Omit<SOSession, 'id' | 'createdAt' | 'updatedAt'> = {
           ...sessionData,
           lastView: 'editSO'
         };
@@ -538,9 +539,10 @@ Total item dengan selisih: ${mismatchedItems.length}`,
     } catch (error) {
       console.error('Error saving draft:', error);
       if (showAlert) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         Alert.alert(
           'Error',
-          'Terjadi kesalahan saat menyimpan draft: ' + (error.message || 'Unknown error')
+          'Terjadi kesalahan saat menyimpan draft: ' + errorMessage
         );
       }
       throw error;

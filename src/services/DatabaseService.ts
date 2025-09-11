@@ -132,6 +132,20 @@ export const initDatabase = async (): Promise<void> => {
       );
     `);
     
+    // Create point_settings table
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS point_settings (
+        id TEXT PRIMARY KEY,
+        amountSpentToEarnPoints REAL NOT NULL,
+        pointsEarnedPerAmount INTEGER NOT NULL,
+        pointsRedemptionRate REAL NOT NULL,
+        minPointsForRedemption INTEGER NOT NULL,
+        maxPointsRedemption REAL NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+    `);
+    
     console.log('Database initialized with all tables');
   } catch (error) {
     console.error('Error initializing database:', error);
@@ -1029,23 +1043,105 @@ export const createMember = async (member: Omit<Member, 'id' | 'totalPurchases' 
 export const getAllMembers = async (): Promise<Member[]> => {
   try {
     const database = await openDatabase();
-    const result: any[] = await database.getAllAsync('SELECT * FROM members ORDER BY name;');
-    
-    return result.map((member) => ({
-      id: member.id,
-      name: member.name,
-      phoneNumber: member.phoneNumber || '',
-      email: member.email || undefined,
-      birthday: member.birthday || undefined,
-      totalPurchases: parseFloat(member.totalPurchases),
-      totalPoints: parseInt(member.totalPoints),
-      lastTransaction: member.lastTransaction || undefined,
-      createdAt: member.createdAt,
-      updatedAt: member.updatedAt
-    }));
+    const members = await database.getAllAsync<Member>('SELECT * FROM members ORDER BY name');
+    return members;
   } catch (error) {
     console.error('Error getting all members:', error);
     throw error;
+  }
+};
+
+// Point Settings interface
+export interface PointSettings {
+  id: string;
+  amountSpentToEarnPoints: number;
+  pointsEarnedPerAmount: number;
+  pointsRedemptionRate: number;
+  minPointsForRedemption: number;
+  maxPointsRedemption: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Save point settings
+export const savePointSettings = async (settings: Omit<PointSettings, 'id' | 'createdAt' | 'updatedAt'>): Promise<PointSettings> => {
+  try {
+    const database = await openDatabase();
+    const id = 'default'; // Using a fixed ID for simplicity
+    const now = new Date().toISOString();
+    
+    // Check if settings already exist
+    const existing = await database.getFirstAsync<PointSettings>('SELECT * FROM point_settings WHERE id = ?', [id]);
+    
+    if (existing) {
+      // Update existing settings
+      await database.runAsync(
+        `UPDATE point_settings SET 
+          amountSpentToEarnPoints = ?, 
+          pointsEarnedPerAmount = ?, 
+          pointsRedemptionRate = ?, 
+          minPointsForRedemption = ?, 
+          maxPointsRedemption = ?, 
+          updatedAt = ? 
+        WHERE id = ?`,
+        [
+          settings.amountSpentToEarnPoints,
+          settings.pointsEarnedPerAmount,
+          settings.pointsRedemptionRate,
+          settings.minPointsForRedemption,
+          settings.maxPointsRedemption,
+          now,
+          id
+        ]
+      );
+    } else {
+      // Insert new settings
+      await database.runAsync(
+        `INSERT INTO point_settings (
+          id, 
+          amountSpentToEarnPoints, 
+          pointsEarnedPerAmount, 
+          pointsRedemptionRate, 
+          minPointsForRedemption, 
+          maxPointsRedemption, 
+          createdAt, 
+          updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          settings.amountSpentToEarnPoints,
+          settings.pointsEarnedPerAmount,
+          settings.pointsRedemptionRate,
+          settings.minPointsForRedemption,
+          settings.maxPointsRedemption,
+          now,
+          now
+        ]
+      );
+    }
+    
+    // Return the saved settings
+    const savedSettings = await database.getFirstAsync<PointSettings>('SELECT * FROM point_settings WHERE id = ?', [id]);
+    if (!savedSettings) {
+      throw new Error('Failed to save point settings');
+    }
+    
+    return savedSettings;
+  } catch (error) {
+    console.error('Error saving point settings:', error);
+    throw error;
+  }
+};
+
+// Get point settings
+export const getPointSettings = async (): Promise<PointSettings | null> => {
+  try {
+    const database = await openDatabase();
+    const settings = await database.getFirstAsync<PointSettings>('SELECT * FROM point_settings WHERE id = ?', ['default']);
+    return settings || null;
+  } catch (error) {
+    console.error('Error getting point settings:', error);
+    return null;
   }
 };
 

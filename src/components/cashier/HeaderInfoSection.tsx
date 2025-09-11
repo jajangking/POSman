@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { POINTS_CONFIG } from '../../utils/pointSystem';
+import { DEFAULT_POINTS_CONFIG } from '../../utils/pointSystem';
 import { Member } from '../../models/Member';
 import { findMemberByPhone } from '../../services/MemberService';
 
@@ -38,7 +38,7 @@ const HeaderInfoSection: React.FC<HeaderInfoSectionProps> = ({
           setPointsToRedeem('0'); // Reset points to redeem
           Alert.alert(
             'Member Found', 
-            `Member: ${member.name}\nTotal Purchases: ${formatCurrency(member.totalPurchases)}\nAvailable Points: ${member.totalPoints}`
+            `Member: ${member.name}\nTotal Purchases: ${formatCurrency(member.totalPurchases)}\nAvailable Points: ${member.totalPoints} pts`
           );
         } else {
           Alert.alert('Member Not Found', 'No member found with that phone number. Please check the number or add a new member.');
@@ -83,7 +83,7 @@ const HeaderInfoSection: React.FC<HeaderInfoSectionProps> = ({
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Points:</Text>
-            <Text style={styles.infoValue}>{selectedMember.totalPoints}</Text>
+            <Text style={styles.infoValue}>{selectedMember.totalPoints} pts</Text>
           </View>
           <View style={styles.memberRow}>
             <Text style={styles.infoLabel}>Redeem Points:</Text>
@@ -104,8 +104,8 @@ const HeaderInfoSection: React.FC<HeaderInfoSectionProps> = ({
                     Alert.alert('Error', 'Not enough points available');
                     return;
                   }
-                  if (points < POINTS_CONFIG.MIN_POINTS_FOR_REDEMPTION) {
-                    Alert.alert('Error', `Minimum ${POINTS_CONFIG.MIN_POINTS_FOR_REDEMPTION} points required for redemption`);
+                  if (points < DEFAULT_POINTS_CONFIG.MIN_POINTS_FOR_REDEMPTION) {
+                    Alert.alert('Error', `Minimum ${DEFAULT_POINTS_CONFIG.MIN_POINTS_FOR_REDEMPTION} points required for redemption`);
                     return;
                   }
                   setPointsToRedeem(points.toString());

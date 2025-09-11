@@ -7,23 +7,33 @@ interface TotalDetailsProps {
   pointsToRedeem: string;
   total: number;
   formatCurrency: (amount: number) => string;
+  tax?: number;
+  discount?: number;
+  discountEnabled?: boolean;
+  taxEnabled?: boolean;
+  taxPercentage?: number;
 }
 
 const TotalDetails: React.FC<TotalDetailsProps> = ({
   subtotal,
   pointsToRedeem,
   total,
-  formatCurrency
+  formatCurrency,
+  tax = 0,
+  discount = 0,
+  discountEnabled = false,
+  taxEnabled = true,
+  taxPercentage = 10
 }) => {
+  // Calculate points discount
+  const points = parseInt(pointsToRedeem) || 0;
+  const pointsDiscount = points * 1000; // Assuming 1 point = Rp 1000 discount
+  
   // For now, we'll use fixed values for discount and tax settings
   // In a real implementation, these would come from app settings
-  const discountEnabled = false; // This would come from app settings
-  const taxEnabled = true; // This would come from app settings
-  const taxPercentage = 10; // This would come from app settings (10%)
-  
-  const discount = discountEnabled ? subtotal * 0.1 : 0; // 10% discount if enabled
-  const tax = taxEnabled ? (subtotal - discount) * (taxPercentage / 100) : 0;
-  const finalTotal = subtotal - discount + tax;
+  const finalDiscount = discountEnabled ? (discount || subtotal * 0.1) : 0; // 10% discount if enabled
+  const finalTax = taxEnabled ? (tax || (subtotal - finalDiscount - pointsDiscount) * (taxPercentage / 100)) : 0;
+  const finalTotal = subtotal - finalDiscount - pointsDiscount + finalTax;
 
   return (
     <View style={styles.totalSection}>
@@ -31,22 +41,22 @@ const TotalDetails: React.FC<TotalDetailsProps> = ({
         <Text style={styles.totalLabel}>Subtotal:</Text>
         <Text style={styles.totalValue}>{formatCurrency(subtotal)}</Text>
       </View>
-      {discountEnabled && discount > 0 && (
+      {discountEnabled && finalDiscount > 0 && (
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Discount:</Text>
-          <Text style={[styles.totalValue, styles.discountValue]}>-{formatCurrency(discount)}</Text>
+          <Text style={[styles.totalValue, styles.discountValue]}>-{formatCurrency(finalDiscount)}</Text>
         </View>
       )}
       {taxEnabled && (
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Tax ({taxPercentage}%):</Text>
-          <Text style={styles.totalValue}>{formatCurrency(tax)}</Text>
+          <Text style={styles.totalValue}>{formatCurrency(finalTax)}</Text>
         </View>
       )}
-      {parseInt(pointsToRedeem) > 0 && (
+      {points > 0 && (
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Points Discount:</Text>
-          <Text style={[styles.totalValue, styles.discountValue]}>-{formatCurrency(redeemPoints(parseInt(pointsToRedeem) || 0))}</Text>
+          <Text style={[styles.totalValue, styles.discountValue]}>-{formatCurrency(pointsDiscount)}</Text>
         </View>
       )}
       <View style={[styles.totalRow, styles.grandTotalRow]}>

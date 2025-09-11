@@ -44,7 +44,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
         settings.taxPercentage,
         settings.footerMessage,
         settings.bluetoothDevice
-      );
+      ); */
       
       Alert.alert('Success', 'Settings saved successfully');
     } catch (error) {
@@ -190,6 +190,17 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onBack }) => {
                 onValueChange={(value) => setSettings({...settings, discountEnabled: value})}
               />
             </View>
+            
+            <TouchableOpacity 
+              style={styles.manageButton} 
+              onPress={() => Alert.alert(
+                'Advanced Discount Management', 
+                'For advanced discount rules and management, please go to Discount Management from the main dashboard.',
+                [{ text: 'OK' }]
+              )}
+            >
+              <Text style={styles.manageButtonText}>Manage Discount Rules →</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Tax Settings */}
@@ -371,6 +382,15 @@ const styles = StyleSheet.create({
   scanButtonText: {
     color: 'white',
     fontWeight: '600',
+  },
+  manageButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+  },
+  manageButtonText: {
+    color: '#007AFF',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, FlatList, Alert, Platform, Keyboard, LayoutAnimation, UIManager, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchAllInventoryItems, fetchInventoryItemByCode } from '../services/InventoryService';
-import { getCurrentSOSession, updateSOSessionItems, upsertSOSession } from '../services/DatabaseService';
+import { getCurrentSOSession, updateSOSessionItems, upsertSOSession, SOSession } from '../services/DatabaseService';
 import { InventoryItem } from '../models/Inventory';
 
 interface GrandSOProps {
@@ -235,9 +235,9 @@ const GrandSO: React.FC<GrandSOProps> = ({ onBack, onNavigateToEditSO }) => {
       // Update session to reflect that we're going to editSO
       const sessionData = await getCurrentSOSession();
       if (sessionData) {
-        const updatedSession = {
+        const updatedSession: Omit<SOSession, 'id' | 'createdAt' | 'updatedAt'> = {
           ...sessionData,
-          lastView: 'editSO'
+          lastView: 'grandSO'
         };
         await upsertSOSession(updatedSession);
       }
