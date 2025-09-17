@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { redeemPoints } from '../../services/MemberService';
+import { redeemPoints, calculatePointsEarned } from '../../services/MemberService';
+import { DEFAULT_POINTS_CONFIG } from '../../utils/pointSystem';
 
 interface TotalDetailsProps {
   subtotal: number;
@@ -25,15 +26,15 @@ const TotalDetails: React.FC<TotalDetailsProps> = ({
   taxEnabled = true,
   taxPercentage = 10
 }) => {
-  // Calculate points discount
+  // Calculate points discount using the correct point redemption rate
   const points = parseInt(pointsToRedeem) || 0;
-  const pointsDiscount = points * 1000; // Assuming 1 point = Rp 1000 discount
+  const pointsDiscount = points * DEFAULT_POINTS_CONFIG.POINTS_REDEMPTION_RATE; // 1 point = 1 Rupiah by default
   
   // For now, we'll use fixed values for discount and tax settings
   // In a real implementation, these would come from app settings
   const finalDiscount = discountEnabled ? (discount || subtotal * 0.1) : 0; // 10% discount if enabled
-  const finalTax = taxEnabled ? (tax || (subtotal - finalDiscount - pointsDiscount) * (taxPercentage / 100)) : 0;
-  const finalTotal = subtotal - finalDiscount - pointsDiscount + finalTax;
+  const finalTax = taxEnabled ? (subtotal - finalDiscount) * (taxPercentage / 100) : 0;
+  const finalTotal = subtotal - finalDiscount + finalTax;
 
   return (
     <View style={styles.totalSection}>
@@ -55,7 +56,7 @@ const TotalDetails: React.FC<TotalDetailsProps> = ({
       )}
       {points > 0 && (
         <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Points Discount:</Text>
+          <Text style={styles.totalLabel}>Potong Poin:</Text>
           <Text style={[styles.totalValue, styles.discountValue]}>-{formatCurrency(pointsDiscount)}</Text>
         </View>
       )}

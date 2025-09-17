@@ -2,6 +2,7 @@
   "name": "posman",
   "version": "1.0.0",
   "main": "index.ts",
+  "type": "module",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
@@ -12,9 +13,12 @@
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-navigation/native": "^7.1.17",
     "@react-navigation/stack": "^7.4.8",
+    "date-fns": "^4.1.0",
     "expo": "~53.0.22",
     "expo-barcode-scanner": "13.0.1",
     "expo-camera": "~16.1.11",
+    "expo-print": "~14.1.4",
+    "expo-sharing": "~13.1.5",
     "expo-sqlite": "~15.2.14",
     "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
@@ -24,14 +28,19 @@
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
-    "react-native-share": "11.1.0",
     "react-native-svg": "15.11.2",
-    "react-native-view-shot": "4.0.3"
+    "react-native-vector-icons": "^10.3.0",
+    "react-native-view-shot": "4.0.3",
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
     "typescript": "~5.8.3"
   },
-  "private": true
+  "private": true,
+  "comments": {
+    "printer-dependencies": "For Bluetooth printer support, after ejecting to bare workflow, install: react-native-bluetooth-escpos-printer",
+    "bluetooth-printer": "See BLUETOOTH_PRINTER_INTEGRATION.md for detailed integration instructions"
+  }
 }

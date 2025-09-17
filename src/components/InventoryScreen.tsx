@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, BackHandler, Alert } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, BackHandler, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import InventoryManagement from './InventoryManagement';
 import InventoryForm from './InventoryForm';
 import ItemLogScreen from './ItemLogScreen';
+import CategoryManagement from './CategoryManagement';
 import { InventoryItem } from '../models/Inventory';
 
 interface InventoryScreenProps {
@@ -14,6 +15,34 @@ interface InventoryScreenProps {
 const InventoryScreen: React.FC<InventoryScreenProps> = ({ onBack, onNavigateToItemLog }) => {
   const [view, setView] = useState<'list' | 'form' | 'log'>('list');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | undefined>(undefined);
+  const [showCategoryManagement, setShowCategoryManagement] = useState(false);
+
+  // Handle Android back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (view === 'form') {
+        // Check if there are unsaved changes
+        Alert.alert(
+          'Unsaved Changes',
+          'You have unsaved changes. Are you sure you want to go back?',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => {} },
+            { text: 'Go Back', style: 'destructive', onPress: () => setView('list') }
+          ]
+        );
+        return true; // Prevent default back behavior
+      } else {
+        // For list or log view, let the parent handle it
+        if (onBack) {
+          onBack();
+          return true;
+        }
+        return false; // Use default back behavior
+      }
+    });
+
+    return () => backHandler.remove();
+  }, [view, onBack]);
 
   const handleAddItem = () => {
     setSelectedItem(undefined);
@@ -71,6 +100,16 @@ const InventoryScreen: React.FC<InventoryScreenProps> = ({ onBack, onNavigateToI
               <TouchableOpacity style={styles.addButton} onPress={handleAddItem}>
                 <Text style={styles.addButtonText}>+ Add Item</Text>
               </TouchableOpacity>
+            ) : view === 'form' ? (
+              <TouchableOpacity 
+                style={styles.categoryButton} 
+                onPress={() => {
+                  console.log('Category button pressed');
+                  setShowCategoryManagement(true);
+                }}
+              >
+                <Text style={styles.categoryButtonText}>Categories</Text>
+              </TouchableOpacity>
             ) : (
               <View style={styles.placeholder} /> // Placeholder untuk menjaga keseimbangan layout
             )}
@@ -88,6 +127,7 @@ const InventoryScreen: React.FC<InventoryScreenProps> = ({ onBack, onNavigateToI
             item={selectedItem} 
             onSave={handleSave} 
             onCancel={handleCancel} 
+            onShowCategoryManagement={() => setShowCategoryManagement(true)}
           />
         ) : view === 'log' && selectedItem ? (
           <ItemLogScreen
@@ -96,6 +136,32 @@ const InventoryScreen: React.FC<InventoryScreenProps> = ({ onBack, onNavigateToI
             onBack={() => setView('list')}
           />
         ) : null}
+        
+        <Modal
+          animationType="slide"
+          transparent={false} // Mengubah menjadi false agar menutupi layar penuh
+          visible={showCategoryManagement}
+          onRequestClose={() => {
+            console.log('Modal onRequestClose triggered');
+            setShowCategoryManagement(false);
+          }}
+        >
+          <View style={styles.fullScreenModalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Manage Categories</Text>
+              <TouchableOpacity 
+                style={styles.modalCloseButton} 
+                onPress={() => {
+                  console.log('Modal close button pressed');
+                  setShowCategoryManagement(false);
+                }}
+              >
+                <Text style={styles.modalCloseButtonText}>×</Text>
+              </TouchableOpacity>
+            </View>
+            {showCategoryManagement ? <CategoryManagement /> : null}
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -145,8 +211,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     zIndex: -1, // Memastikan title tidak mengganggu interaksi tombol
   },
-  addButton: {
+  categoryButton: {
     backgroundColor: '#34C759',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryButtonText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  addButton: {
+    backgroundColor: '#007AFF',
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
@@ -161,6 +241,31 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     minWidth: 90, // Placeholder dengan ukuran yang sama dengan tombol Add Item
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalCloseButton: {
+    padding: 5,
+  },
+  modalCloseButtonText: {
+    fontSize: 24,
+    color: '#999',
+    fontWeight: 'bold',
+  },
+  fullScreenModalContainer: {
+    flex: 1,
+    backgroundColor: 'white',
   },
 });
 

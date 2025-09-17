@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, BackHandler, Alert, ActivityIndicator } from 'react-native';
 import { formatRupiah } from '../../models/Inventory';
 import { CartItem } from '../../services/CashierService';
+import { DEFAULT_POINTS_CONFIG } from '../../utils/pointSystem';
+import { calculatePointsEarned as calculatePoints } from '../../services/MemberService';
+import { isPrinterConnected, getConnectionStatus } from '../../services/PrinterService';
 
 interface ReceiptPageProps {
   transactionId: string;
@@ -12,9 +15,7 @@ interface ReceiptPageProps {
   paymentMethod: string;
   amountPaid: number;
   change: number;
-  pointsEarned: number;
   currentPoints: number;
-  newPointsBalance: number;
   memberName?: string;
   discount?: number;
   pointsRedeemed?: number;
@@ -24,6 +25,8 @@ interface ReceiptPageProps {
     phone: string;
     paperSize: '80mm' | '58mm';
     footerMessage: string;
+    taxEnabled?: boolean;
+    taxPercentage?: number;
   };
   onPrint: () => void;
   onNewTransaction: () => void;
@@ -38,9 +41,7 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
   paymentMethod,
   amountPaid,
   change,
-  pointsEarned,
   currentPoints,
-  newPointsBalance,
   memberName,
   discount = 0, // Add default value
   pointsRedeemed,
@@ -55,11 +56,15 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
     paperSize: '80mm' as '80mm' | '58mm',
     footerMessage: 'Terima kasih telah berbelanja di toko kami!'
   });
+  const [printerStatus, setPrinterStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
 
   useEffect(() => {
     if (storeSettings) {
       setLocalStoreSettings(storeSettings);
     }
+    
+    // Check printer connection status
+    checkPrinterStatus();
     
     // Handle hardware back button on Android
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -74,6 +79,16 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
       backHandler.remove();
     };
   }, [storeSettings]);
+
+  const checkPrinterStatus = async () => {
+    try {
+      const connected = await isPrinterConnected();
+      setPrinterStatus(connected ? 'connected' : 'disconnected');
+    } catch (error) {
+      console.error('Error checking printer status:', error);
+      setPrinterStatus('disconnected');
+    }
+  };
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('id-ID', {
@@ -156,13 +171,23 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
             <Text style={styles.detailValue}>{formatRupiah(subtotal)}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>PPN (10%)</Text>
+            <Text style={styles.detailLabel}>
+              {storeSettings?.taxEnabled ? `PPN (${storeSettings.taxPercentage}%)` : 'PPN'}
+            </Text>
             <Text style={styles.detailValue}>{formatRupiah(tax)}</Text>
           </View>
-          {discount && discount > 0 ? (
+          {/* Tampilkan Diskon hanya jika tidak ada poin yang digunakan */}
+          {discount && discount > 0 && (!pointsRedeemed || pointsRedeemed <= 0) ? (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Diskon</Text>
               <Text style={styles.detailValue}>-{formatRupiah(discount)}</Text>
+            </View>
+          ) : null}
+          {/* Tampilkan Potong Poin jika ada poin yang digunakan */}
+          {pointsRedeemed && pointsRedeemed > 0 ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Potong Poin</Text>
+              <Text style={styles.detailValue}>-{formatRupiah(pointsRedeemed)}</Text>
             </View>
           ) : null}
           <View style={[styles.detailRow, styles.totalRow]}>
@@ -192,23 +217,14 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
                 <Text style={styles.detailLabel}>Nama Member</Text>
                 <Text style={styles.detailValue}>{memberName}</Text>
               </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Poin Sekarang</Text>
-                <Text style={styles.detailValue}>{currentPoints}</Text>
-              </View>
+              {/* Tampilkan Poin Bertambah dan Total Poin Sekarang */}
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Poin Bertambah</Text>
-                <Text style={styles.detailValue}>+{pointsEarned}</Text>
+                <Text style={styles.detailValue}>+{calculatePoints(subtotal)}</Text>
               </View>
-              {pointsRedeemed && pointsRedeemed > 0 && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Poin Digunakan</Text>
-                  <Text style={styles.detailValue}>-{pointsRedeemed}</Text>
-                </View>
-              )}
               <View style={[styles.detailRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>Total Poin</Text>
-                <Text style={styles.totalValue}>{newPointsBalance}</Text>
+                <Text style={styles.totalLabel}>Total Poin Sekarang</Text>
+                <Text style={styles.totalValue}>{currentPoints - (pointsRedeemed || 0) + calculatePoints(subtotal)}</Text>
               </View>
             </>
           )}
@@ -224,7 +240,18 @@ const ReceiptPage: React.FC<ReceiptPageProps> = ({
       {/* Action Buttons */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.printButton} onPress={onPrint}>
-          <Text style={styles.printButtonText}>Cetak Struk</Text>
+          <Text style={styles.printButtonText}>
+            {printerStatus === 'checking' ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <ActivityIndicator size="small" color="white" />
+                <Text style={[styles.printButtonText, { marginLeft: 10 }]}>Memeriksa Printer...</Text>
+              </View>
+            ) : printerStatus === 'connected' ? (
+              'Cetak Struk'
+            ) : (
+              'Cetak Struk (Tidak Terhubung)'
+            )}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.newTransactionButton} onPress={onNewTransaction}>
           <Text style={styles.newTransactionButtonText}>Transaksi Baru</Text>
@@ -427,13 +454,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   thankYou: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#007AFF',
     marginBottom: 10,
   },
   footerText: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
     marginBottom: 2,

@@ -8,7 +8,8 @@ import {
   searchInventoryItems,
   getInventoryItemsByCategory,
   getLowStockItems,
-  getInventoryTransactionsByItemCode
+  getInventoryTransactionsByItemCode,
+  getTopSellingItems
 } from '../services/DatabaseService';
 import { InventoryItem, InventoryTransaction, formatRupiah } from '../models/Inventory';
 
@@ -66,6 +67,17 @@ export const fetchLowStockItems = async (): Promise<InventoryItem[]> => {
     return items;
   } catch (error) {
     console.error('Error fetching low stock items:', error);
+    throw error;
+  }
+};
+
+// Get top selling items
+export const fetchTopSellingItems = async (limit: number = 10): Promise<{itemCode: string, totalSold: number}[]> => {
+  try {
+    const topItems = await getTopSellingItems(limit);
+    return topItems;
+  } catch (error) {
+    console.error('Error fetching top selling items:', error);
     throw error;
   }
 };

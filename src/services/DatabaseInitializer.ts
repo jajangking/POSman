@@ -1,8 +1,11 @@
-import { openDatabase } from './DatabaseService';
+import { openDatabase, initDatabase } from './DatabaseService';
 
 // Initialize database with sample products
 export const initializeSampleProducts = async (): Promise<void> => {
   try {
+    // Initialize database tables first
+    await initDatabase();
+    
     const database = await openDatabase();
     
     // Check if we have any products

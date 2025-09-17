@@ -6,10 +6,15 @@ import { useAuth } from '../context/AuthContext';
 import { searchProducts, getProductByCode, generateReceiptNumber, saveTransaction, CartItem, getAllActiveProducts } from '../services/CashierService';
 import { findMemberByPhone, redeemPoints, calculatePointsEarned, updateMemberPoints } from '../services/MemberService';
 import { Member } from '../models/Member';
-import { DEFAULT_POINTS_CONFIG } from '../utils/pointSystem';
+import { DEFAULT_POINTS_CONFIG, getCurrentPointSettings } from '../utils/pointSystem';
 import { InventoryItem, formatRupiah } from '../models/Inventory';
 import ScannerModal from './ScannerModal';
 import ItemListModal from './ItemListModal';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import PrintableReceipt from './cashier/PrintableReceipt';
+import { getStoreSettings } from '../services/DatabaseService';
+import { printReceipt } from '../services/PrinterService';
 import { 
   HeaderInfoSection,
   SearchPanel,
@@ -53,13 +58,56 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
     address: 'Jl. Contoh No. 123, Jakarta',
     phone: '(021) 123-4567',
     paperSize: '80mm' as '80mm' | '58mm', // Default paper size
-    footerMessage: 'Terima kasih telah berbelanja di toko kami!'
+    footerMessage: 'Terima kasih telah berbelanja di toko kami!',
+    taxEnabled: true, // Default tax enabled
+    taxPercentage: 10.0 // Default tax percentage
   }); // State for store settings
   const [paymentDetails, setPaymentDetails] = useState({
     paymentMethod: 'cash',
     amountPaid: 0,
     change: 0
   }); // State for payment details
+  
+  // Load store settings from database
+  const loadStoreSettings = async () => {
+    try {
+      const settings = await getStoreSettings();
+      if (settings) {
+        setStoreSettings({
+          name: settings.name,
+          address: settings.address,
+          phone: settings.phone,
+          paperSize: settings.paperSize,
+          footerMessage: settings.footerMessage,
+          taxEnabled: settings.taxEnabled,
+          taxPercentage: settings.taxPercentage
+        });
+      } else {
+        // Use default settings if no settings found in database
+        setStoreSettings({
+          name: 'TOKO POSman',
+          address: 'Jl. Contoh No. 123, Jakarta',
+          phone: '(021) 123-4567',
+          paperSize: '80mm',
+          footerMessage: 'Terima kasih telah berbelanja di toko kami!',
+          taxEnabled: true,
+          taxPercentage: 10.0
+        });
+      }
+    } catch (error) {
+      console.error('Error loading store settings:', error);
+      // Use default settings if there's an error
+      setStoreSettings({
+        name: 'TOKO POSman',
+        address: 'Jl. Contoh No. 123, Jakarta',
+        phone: '(021) 123-4567',
+        paperSize: '80mm',
+        footerMessage: 'Terima kasih telah berbelanja di toko kami!',
+        taxEnabled: true,
+        taxPercentage: 10.0
+      });
+    }
+  };
   
   // Transaction session key for AsyncStorage
   const TRANSACTION_SESSION_KEY = 'cashier_transaction_session';
@@ -123,7 +171,29 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
   useEffect(() => {
     loadTransactionSession();
   }, []);
+
+  // Load store settings when component mounts
+  useEffect(() => {
+    loadStoreSettings();
+  }, []);
   
+  // Reload store settings when component becomes visible again
+  // This ensures settings are updated after returning from settings page
+  useEffect(() => {
+    const unsubscribe = () => {
+      // Reload settings when component is focused
+      loadStoreSettings();
+    };
+    
+    // For now, we'll reload settings each time the component mounts
+    // In a more complex app, we might use a focus event listener
+    loadStoreSettings();
+    
+    return unsubscribe;
+  }, []);
+  
+  const receiptRef = useRef(null);
+  const printableReceiptRef = useRef(null);
   const [receiptCartItems, setReceiptCartItems] = useState<CartItem[]>([]); // State for cart items on receipt page
   const [receiptMember, setReceiptMember] = useState<Member | null>(null); // State for member on receipt page
   const [receiptDiscount, setReceiptDiscount] = useState(0); // State for discount on receipt page
@@ -139,7 +209,7 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
     }, 1000);
     
     // Handle hardware back button on Android
-  const backHandler = BackHandler.addEventListener('hardwareBackPress', async () => {
+  const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
     // If we're on the payment page, go back to the cashier screen
     if (showPaymentPage) {
       setShowPaymentPage(false);
@@ -156,7 +226,7 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
     // go directly to dashboard without confirmation
     if (cartItems.length === 0 && !selectedMember) {
       // Save session before leaving (in case there's any data to save)
-      await saveTransactionSession();
+      saveTransactionSession();
       onBack();
       return true;
     }
@@ -201,11 +271,30 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
     // Return true to indicate we've handled the back press
     return true;
   });
-    
-    // Load store settings from database
   const loadStoreSettings = async () => {
     try {
-      // For now, we'll use default settings since getStoreSettings is not available
+      const settings = await getStoreSettings();
+      if (settings) {
+        setStoreSettings({
+          name: settings.storeName,
+          address: settings.storeAddress,
+          phone: settings.storePhone,
+          paperSize: settings.paperSize,
+          footerMessage: settings.footerMessage
+        });
+      } else {
+        // Use default settings if no settings found in database
+        setStoreSettings({
+          name: 'TOKO POSman',
+          address: 'Jl. Contoh No. 123, Jakarta',
+          phone: '(021) 123-4567',
+          paperSize: '80mm',
+          footerMessage: 'Terima kasih telah berbelanja di toko kami!'
+        });
+      }
+    } catch (error) {
+      console.error('Error loading store settings:', error);
+      // Use default settings if there's an error
       setStoreSettings({
         name: 'TOKO POSman',
         address: 'Jl. Contoh No. 123, Jakarta',
@@ -213,14 +302,8 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
         paperSize: '80mm',
         footerMessage: 'Terima kasih telah berbelanja di toko kami!'
       });
-    } catch (error) {
-      console.error('Error loading store settings:', error);
     }
   };
-    
-    loadStoreSettings();
-    
-    // Generate receipt number with error handling
     const generateReceipt = async () => {
       try {
         // Use first 3 letters of username or default to 'USR'
@@ -239,9 +322,6 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
     };
     
     generateReceipt();
-    
-    // Load transaction session
-    loadTransactionSession();
     
     // Cleanup function
     return () => {
@@ -510,11 +590,10 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
     try {
       // Calculate totals
       const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
-      const tax = subtotal * 0.1; // 10% tax
+      const tax = storeSettings.taxEnabled ? subtotal * (storeSettings.taxPercentage / 100) : 0; // Use store settings
       
       // Calculate points to redeem
-      const points = parseInt(pointsToRedeem) || 0;
-      const pointsDiscount = points * 1000; // Assuming 1 point = Rp 1000 discount
+      const points = parseInt(pointsToRedeem) || 0;      const pointsDiscount = points * DEFAULT_POINTS_CONFIG.POINTS_REDEMPTION_RATE; // 1 point = 1 Rupiah by default
       
       const total = subtotal + tax - pointsDiscount;
       
@@ -534,7 +613,7 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
       
       // Save transaction to database
       if (currentUser) {
-        await saveTransaction(cartItems, total, currentUser.id, receiptNumber, selectedMember?.id, points);
+        await saveTransaction(cartItems, total, currentUser.id, receiptNumber, selectedMember?.id, points, paymentMethod);
         
         // Update member points if member is selected
         if (selectedMember) {
@@ -583,12 +662,71 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
   };
 
   // Handle print receipt
-  const handlePrintReceipt = () => {
-    // In a real app, this would connect to a printer
-    Alert.alert('Cetak Struk', 'Fungsi pencetakan struk akan diimplementasikan di sini.');
+  const handlePrintReceipt = async () => {
+    try {
+      // Check if auto-print is enabled in settings
+      const settings = await getStoreSettings();
+      if (settings && settings.printAuto && settings.bluetoothDevice) {
+        // Prepare receipt data for printing
+        const receiptData = {
+          storeName: settings.name,
+          storeAddress: settings.address,
+          storePhone: settings.phone,
+          transactionId: receiptNumber,
+          date: new Date().toLocaleDateString('id-ID', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+          }) + ' ' + new Date().toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit'
+          }),
+          cashier: currentUser?.name || 'Admin',
+          items: receiptCartItems.map(item => ({
+            name: item.name,
+            qty: item.qty,
+            price: item.price,
+            subtotal: item.subtotal
+          })),
+          subtotal: receiptSubtotal,
+          tax: receiptTax,
+          discount: receiptDiscount,
+          total: receiptTotal,
+          paymentMethod: paymentDetails.paymentMethod,
+          amountPaid: paymentDetails.amountPaid,
+          change: paymentDetails.change,
+          memberName: receiptMember ? receiptMember.name : undefined,
+          footerMessage: settings.footerMessage,
+          paperSize: settings.paperSize
+        };
+
+        // Print the receipt using Bluetooth printer
+        const printSuccess = await printReceipt(receiptData);
+        if (printSuccess) {
+          Alert.alert('Success', 'Receipt printed successfully!');
+          return;
+        }
+      }
+      
+      // Fallback to sharing if printing fails or is not enabled
+      const uri = await captureRef(printableReceiptRef, {
+        format: 'png',
+        quality: 0.8,
+        result: 'tmpfile',
+      });
+      
+      // Share the captured image using Expo Sharing
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/png',
+        dialogTitle: 'Share Receipt',
+      });
+    } catch (error) {
+      console.error('Error printing receipt:', error);
+      Alert.alert('Error', 'Failed to print receipt. Please try again.');
+    }
   };
-      // Generate new receipt number
-      // Handle new transaction
+
+  // Handle new transaction
   const handleNewTransaction = async () => {
     try {
       // Generate new receipt number
@@ -638,7 +776,9 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
 
   // Open settings modal
   const openSettings = () => {
-    setShowSettingsModal(true);
+    if (onNavigateToSettings) {
+      onNavigateToSettings();
+    }
   };
 
   // Close settings modal
@@ -651,18 +791,12 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
     return cartItems.reduce((sum, item) => sum + item.subtotal, 0);
   }, [cartItems]);
   
-  // For now, we'll use fixed values for discount and tax settings
-  // In a real implementation, these would come from app settings
-  const discountEnabled = false; // This would come from app settings
-  const taxEnabled = true; // This would come from app settings
-  const taxPercentage = 10; // This would come from app settings (10%)
-  
-  // Calculate points discount
+  // Calculate points discount using the correct point redemption rate
   const points = parseInt(pointsToRedeem) || 0;
-  const pointsDiscount = points * 1000; // Assuming 1 point = Rp 1000 discount
+  const pointsDiscount = points * DEFAULT_POINTS_CONFIG.POINTS_REDEMPTION_RATE; // 1 point = 1 Rupiah by default
   
-  const discount = discountEnabled ? subtotal * 0.1 : 0; // 10% discount if enabled
-  const tax = taxEnabled ? (subtotal - discount - pointsDiscount) * (taxPercentage / 100) : 0;
+  const discount = storeSettings.discountEnabled ? subtotal * 0.1 : 0; // 10% discount if enabled
+  const tax = storeSettings.taxEnabled ? (subtotal - discount) * (storeSettings.taxPercentage / 100) : 0;
   const total = subtotal - discount - pointsDiscount + tax;
 
   return (
@@ -672,21 +806,11 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
           {!showPaymentPage && !showReceiptPage && (
             <>
               <View style={styles.header}>
-                <TouchableOpacity style={styles.backButton} onPress={async () => {
-                  // If there's no active transaction (no items in cart and no member selected), 
-                  // go directly to dashboard without confirmation
-                  if (cartItems.length === 0 && !selectedMember) {
-                    // Save session before leaving (in case there's any data to save)
-                    await saveTransactionSession();
-                    onBack();
-                    return;
-                  }
-                  
-                  // If there's an active transaction (cart has items or member selected), 
-                  // ask user what to do with it
+                <TouchableOpacity style={styles.backButton} onPress={() => {
+                  // Show confirmation dialog before leaving
                   Alert.alert(
-                    'Transaksi Belum Selesai',
-                    'Anda memiliki transaksi yang belum diselesaikan. Apa yang ingin Anda lakukan?',
+                    'Konfirmasi Keluar',
+                    'Apakah Anda yakin ingin keluar dari halaman kasir? Transaksi saat ini akan hilang jika tidak disimpan.',
                     [
                       {
                         text: 'Lanjutkan Transaksi',
@@ -700,21 +824,6 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
                           // Call the original onBack function
                           onBack();
                         }
-                      },
-                      {
-                        text: 'Hapus & Keluar',
-                        onPress: async () => {
-                          // Clear current session
-                          await clearTransactionSession();
-                          // Clear cart and member for new transaction
-                          setCartItems([]);
-                          setSelectedMember(null);
-                          setMemberNumber('');
-                          setPointsToRedeem('0');
-                          // Call the original onBack function
-                          onBack();
-                        },
-                        style: 'destructive'
                       }
                     ]
                   );
@@ -763,9 +872,9 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
                 pointsToRedeem={pointsToRedeem}
                 total={total}
                 formatCurrency={formatCurrency}
-                discountEnabled={discountEnabled}
-                taxEnabled={taxEnabled}
-                taxPercentage={taxPercentage}
+                discountEnabled={storeSettings.discountEnabled}
+                taxEnabled={storeSettings.taxEnabled}
+                taxPercentage={storeSettings.taxPercentage}
               />
 
               {/* Function Buttons */}
@@ -797,25 +906,46 @@ const CashierScreen: React.FC<CashierScreenProps> = ({ onBack, onNavigateToMembe
 
           {/* Receipt Page */}
           {showReceiptPage && (
-            <ReceiptPage
-              transactionId={receiptNumber}
-              cartItems={receiptCartItems}
-              subtotal={receiptSubtotal}
-              tax={receiptTax}
-              total={receiptTotal}
-              paymentMethod={paymentDetails.paymentMethod}
-              amountPaid={paymentDetails.amountPaid}
-              change={paymentDetails.change}
-              pointsEarned={calculatePointsEarned(receiptSubtotal)}
-              currentPoints={receiptMember ? receiptMember.totalPoints : 0}
-              newPointsBalance={receiptMember ? receiptMember.totalPoints + calculatePointsEarned(receiptSubtotal) : 0}
-              memberName={receiptMember ? receiptMember.name : undefined}
-              storeSettings={storeSettings}
-              discount={receiptDiscount}
-              pointsRedeemed={receiptPointsRedeemed}
-              onPrint={handlePrintReceipt}
-              onNewTransaction={handleNewTransaction}
-            />
+            <>
+              <View ref={receiptRef} collapsable={false} style={{ flex: 1 }}>
+                <ReceiptPage
+                  transactionId={receiptNumber}
+                  cartItems={receiptCartItems}
+                  subtotal={receiptSubtotal}
+                  tax={receiptTax}
+                  total={receiptTotal}
+                  paymentMethod={paymentDetails.paymentMethod}
+                  amountPaid={paymentDetails.amountPaid}
+                  change={paymentDetails.change}
+                  currentPoints={receiptMember ? receiptMember.totalPoints : 0}
+                  memberName={receiptMember ? receiptMember.name : undefined}
+                  storeSettings={storeSettings}
+                  discount={receiptDiscount}
+                  pointsRedeemed={receiptPointsRedeemed}
+                  onPrint={handlePrintReceipt}
+                  onNewTransaction={handleNewTransaction}
+                />
+              </View>
+              <View style={{ opacity: 0, position: 'absolute', left: -1000 }}>
+                <View ref={printableReceiptRef} collapsable={false}>
+                  <PrintableReceipt
+                    transactionId={receiptNumber}
+                    cartItems={receiptCartItems}
+                    subtotal={receiptSubtotal}
+                    tax={receiptTax}
+                    total={receiptTotal}
+                    paymentMethod={paymentDetails.paymentMethod}
+                    amountPaid={paymentDetails.amountPaid}
+                    change={paymentDetails.change}
+                    currentPoints={receiptMember ? receiptMember.totalPoints : 0}
+                    memberName={receiptMember ? receiptMember.name : undefined}
+                    storeSettings={storeSettings}
+                    discount={receiptDiscount}
+                    pointsRedeemed={receiptPointsRedeemed}
+                  />
+                </View>
+              </View>
+            </>
           )}
 
           {/* Calculator Modal */}

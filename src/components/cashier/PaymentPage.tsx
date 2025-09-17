@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, BackHandler } from 'react-native';
 import { formatRupiah } from '../../models/Inventory';
 import { CartItem } from '../../services/CashierService';
-import { DEFAULT_POINTS_CONFIG } from '../../utils/pointSystem';
+import { DEFAULT_POINTS_CONFIG, getCurrentPointSettings } from '../../utils/pointSystem';
+import { calculatePointsEarned as calculatePoints } from '../../services/MemberService';
 
 interface PaymentPageProps {
   cartItems: CartItem[];
@@ -29,7 +30,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
   onPaymentComplete,
   onBack 
 }) => {
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'ewallet'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'ewallet' | 'onlineshop'>('cash');
   const [amountPaid, setAmountPaid] = useState<string>('');
   const [change, setChange] = useState<number>(0);
   const [showCalculator, setShowCalculator] = useState(false);
@@ -37,18 +38,11 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
   const [pointsEarned, setPointsEarned] = useState(0);
   const [currentPoints, setCurrentPoints] = useState(0);
 
-  // For now, we'll use fixed values for discount and tax settings
-  // In a real implementation, these would come from app settings
-  const discountEnabled = false; // This would come from app settings
-  const taxEnabled = true; // This would come from app settings
-  const taxPercentage = 10; // This would come from app settings (10%)
-  
-  // Calculate discount and tax based on settings
-  const discount = discountEnabled ? subtotal * 0.1 : 0; // 10% discount if enabled
-  const calculatedTax = taxEnabled ? (subtotal - discount) * (taxPercentage / 100) : 0;
+  // Calculate discount and points discount
+  const discount = 0; // No discount in payment page
   const points = selectedMember ? parseInt(pointsToRedeem) || 0 : 0;
-  const pointsDiscount = points * 1000; // Assuming 1 point = Rp 1000 discount
-  const finalTotal = subtotal - discount - pointsDiscount + calculatedTax;
+  const pointsDiscount = points * DEFAULT_POINTS_CONFIG.POINTS_REDEMPTION_RATE; // 1 point = 1 Rupiah by default
+  // Use the total prop directly instead of calculating
 
   // Format number with thousands separator
   const formatNumber = (num: string): string => {
@@ -116,16 +110,18 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
     }
   };
 
-  // Calculate points earned (example: 1 point for every Rp 1000 spent)
+  // Calculate points earned using the correct point earning rate
   const calculatePointsEarned = (amount: number): number => {
-    return Math.floor(amount / 1000);
+    // Calculate points based on the ratio defined in configuration
+    const points = (amount / DEFAULT_POINTS_CONFIG.AMOUNT_SPENT_TO_EARN_POINTS) * DEFAULT_POINTS_CONFIG.POINTS_EARNED_PER_AMOUNT;
+    return Math.floor(points);
   };
 
   // Handle payment confirmation
   const handleConfirmPayment = () => {
     const paidAmount = parseFormattedNumber(amountPaid);
     
-    if (paymentMethod === 'cash' && paidAmount < finalTotal) {
+    if (paymentMethod === 'cash' && paidAmount < total) {
       Alert.alert('Pembayaran Tidak Cukup', 'Jumlah yang dibayar kurang dari total belanja.');
       return;
     }
@@ -137,14 +133,13 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
     
     // Calculate points
     const points = selectedMember ? parseInt(pointsToRedeem) || 0 : 0;
-    const pointsDiscount = points * 1000; // Assuming 1 point = Rp 1000 discount
-    const amountAfterPoints = subtotal + pointsDiscount; // Amount before points discount for point calculation
-    const earnedPoints = calculatePointsEarned(amountAfterPoints);
+    const pointsDiscount = points * DEFAULT_POINTS_CONFIG.POINTS_REDEMPTION_RATE; // 1 point = 1 Rupiah by default
+    const amountAfterPoints = subtotal; // Points are calculated based on subtotal, not amountAfterPoints
+    const earnedPoints = calculatePoints(subtotal); // Points are calculated based on subtotal, not amountAfterPoints
     setPointsEarned(earnedPoints);
     // For demo purposes, we'll use a fixed current points value
     // In a real app, this would come from user data
     setCurrentPoints(selectedMember ? selectedMember.totalPoints : 0);
-    setPointsEarned(earnedPoints);
     // For demo purposes, we'll use a fixed current points value
     // In a real app, this would come from user data
     setCurrentPoints(selectedMember ? selectedMember.totalPoints : 0);
@@ -176,7 +171,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
     
     if (paymentMethod !== 'cash') {
       // Extract only the numeric value from formatted currency
-      const numericValue = finalTotal.toString();
+      const numericValue = total.toString();
       setAmountPaid(numericValue);
       setChange(0);
     }
@@ -185,56 +180,77 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
     return () => {
       backHandler.remove();
     };
-  }, [paymentMethod, finalTotal]);
+  }, [paymentMethod, total]);
 
   // Calculate change when amount paid changes
   useEffect(() => {
     if (amountPaid) {
       const paid = parseFloat(amountPaid.replace(/\./g, '').replace(',', '.'));
       if (!isNaN(paid)) {
-        setChange(paid - finalTotal);
+        setChange(paid - total);
       } else {
         setChange(0);
       }
     } else {
       setChange(0);
     }
-  }, [amountPaid, finalTotal]);
+  }, [amountPaid, total]);
 
   // Get suggested payments based on total amount
   const getSuggestedPayments = (total: number): number[] => {
     // Common denominations in Indonesia
-    const denominations = [1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000];
+    const denominations = [1000, 2000, 5000, 10000, 20000, 50000, 100000];
     
     // Suggested payments
     const suggestions = new Set<number>();
     
-    // Exact amount
+    // Always include the exact amount
     suggestions.add(total);
     
-    // Add common rounded amounts
-    // Round up to nearest thousand
-    const roundedUp = Math.ceil(total / 1000) * 1000;
-    suggestions.add(roundedUp);
+    // Round up to nearest convenient amount
+    // Round up to nearest 1000 if under 10000
+    if (total < 10000) {
+      suggestions.add(Math.ceil(total / 1000) * 1000);
+    }
+    // Round up to nearest 5000 if between 10000 and 50000
+    else if (total < 50000) {
+      suggestions.add(Math.ceil(total / 5000) * 5000);
+    }
+    // Round up to nearest 10000 if 50000 or above
+    else {
+      suggestions.add(Math.ceil(total / 10000) * 10000);
+    }
     
-    // Add common denominations that are >= total
+    // Add common denominations that are slightly above the total
     for (const denom of denominations) {
-      if (denom >= total && denom <= total * 3) { // Only show denominations up to 3x total
+      if (denom >= total && denom <= total * 2.5) { // Only show denominations up to 2.5x total
         suggestions.add(denom);
       }
     }
     
-    // Add specific combinations for common scenarios
-    if (total > 50000 && total <= 65000) {
+    // Add useful combinations of denominations
+    // For example, if total is around 65000, suggest 70000 (50k + 20k)
+    if (total > 45000 && total <= 65000) {
       suggestions.add(70000); // 50k + 20k
     }
     
-    if (total > 65000 && total <= 80000) {
-      suggestions.add(100000);
+    if (total > 65000 && total <= 85000) {
+      suggestions.add(100000); // 100k
     }
     
+    if (total > 85000 && total <= 110000) {
+      suggestions.add(120000); // 100k + 20k
+    }
+    
+    if (total > 110000 && total <= 130000) {
+      suggestions.add(150000); // 100k + 50k
+    }
+    
+    // Filter out suggestions that are too far above the total (> 2.5x)
+    const filteredSuggestions = Array.from(suggestions).filter(amount => amount <= total * 2.5);
+    
     // Convert to array, remove duplicates, and sort
-    return Array.from(suggestions).sort((a, b) => a - b).slice(0, 6); // Limit to 6 suggestions
+    return filteredSuggestions.sort((a, b) => a - b).slice(0, 8); // Limit to 8 suggestions
   };
 
   return (
@@ -271,23 +287,23 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
             <Text style={styles.detailValue}>{formatRupiah(subtotal)}</Text>
           </View>
           
-          {discountEnabled && discount > 0 && (
+          {discount > 0 && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Discount</Text>
               <Text style={[styles.detailValue, styles.discountValue]}>-{formatRupiah(discount)}</Text>
             </View>
           )}
           
-          {taxEnabled && (
+          {tax > 0 && (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Tax ({taxPercentage}%)</Text>
-              <Text style={styles.detailValue}>{formatRupiah(calculatedTax)}</Text>
+              <Text style={styles.detailLabel}>Tax</Text>
+              <Text style={styles.detailValue}>{formatRupiah(tax)}</Text>
             </View>
           )}
           
           <View style={[styles.detailRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>{formatRupiah(finalTotal)}</Text>
+            <Text style={styles.totalValue}>{formatRupiah(total)}</Text>
           </View>
         </View>
 
@@ -316,7 +332,45 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
             >
               <Text style={[styles.paymentMethodText, paymentMethod === 'ewallet' && styles.selectedPaymentMethodText]}>E-Wallet</Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.paymentMethod, paymentMethod === 'onlineshop' && styles.selectedPaymentMethod]} 
+              onPress={() => setPaymentMethod('onlineshop')}
+            >
+              <Text style={[styles.paymentMethodText, paymentMethod === 'onlineshop' && styles.selectedPaymentMethodText]}>Online Shop</Text>
+            </TouchableOpacity>
           </View>
+          
+          {/* Payment Method Information */}
+          {paymentMethod === 'card' && (
+            <View style={styles.paymentInfo}>
+              <Text style={styles.paymentInfoTitle}>Card Payment Information</Text>
+              <Text style={styles.paymentInfoText}>• Swipe, insert, or tap the customer's card</Text>
+              <Text style={styles.paymentInfoText}>• Enter the amount: {formatRupiah(total)}</Text>
+              <Text style={styles.paymentInfoText}>• Wait for payment authorization</Text>
+              <Text style={styles.paymentInfoText}>• Provide receipt to customer</Text>
+            </View>
+          )}
+          
+          {paymentMethod === 'ewallet' && (
+            <View style={styles.paymentInfo}>
+              <Text style={styles.paymentInfoTitle}>E-Wallet Payment Information</Text>
+              <Text style={styles.paymentInfoText}>• Open the customer's E-Wallet app</Text>
+              <Text style={styles.paymentInfoText}>• Scan the QR code or enter the amount: {formatRupiah(total)}</Text>
+              <Text style={styles.paymentInfoText}>• Wait for payment confirmation</Text>
+              <Text style={styles.paymentInfoText}>• Provide receipt to customer</Text>
+            </View>
+          )}
+          
+          {paymentMethod === 'onlineshop' && (
+            <View style={styles.paymentInfo}>
+              <Text style={styles.paymentInfoTitle}>Online Shop Payment Information</Text>
+              <Text style={styles.paymentInfoText}>• Process the order in the respective platform app</Text>
+              <Text style={styles.paymentInfoText}>• Amount: {formatRupiah(total)}</Text>
+              <Text style={styles.paymentInfoText}>• Wait for payment confirmation from the platform</Text>
+              <Text style={styles.paymentInfoText}>• Prepare order for delivery or pickup</Text>
+            </View>
+          )}
         </View>
 
         {/* Amount Paid (only for cash) */}
@@ -337,11 +391,24 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
               <Text style={styles.calculatorIcon}>🔢</Text>
             </TouchableOpacity>
             
+            {/* Explanation text for amount input */}
+            <Text style={styles.inputExplanation}>
+              Tap on the input field above to enter custom amount
+            </Text>
+            
+            {/* Change Display */}
+            <View style={styles.changeContainer}>
+              <Text style={styles.changeLabel}>Change</Text>
+              <Text style={[styles.changeValue, change < 0 && styles.negativeChange]}>
+                {formatRupiah(Math.abs(change))}
+              </Text>
+            </View>
+            
             {/* Suggested Payments */}
             <View style={styles.suggestedPaymentsContainer}>
               <Text style={styles.suggestedPaymentsTitle}>Suggested Payments:</Text>
               <View style={styles.suggestedPayments}>
-                {getSuggestedPayments(finalTotal).map((amount, index) => (
+                {getSuggestedPayments(total).map((amount, index) => (
                   <TouchableOpacity
                     key={index}
                     style={styles.suggestedPaymentButton}
@@ -355,11 +422,25 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
               </View>
             </View>
             
-            <View style={styles.changeContainer}>
-              <Text style={styles.changeLabel}>Change</Text>
-              <Text style={[styles.changeValue, change < 0 && styles.negativeChange]}>
-                {formatRupiah(Math.abs(change))}
-              </Text>
+            {/* Fixed Amount Payments */}
+            <View style={styles.suggestedPaymentsContainer}>
+              <Text style={styles.suggestedPaymentsTitle}>Fixed Amount:</Text>
+              <View style={styles.suggestedPayments}>
+                {[5000, 10000, 20000, 50000, 100000].map((amount, index) => (
+                  <TouchableOpacity
+                    key={`fixed-${index}`}
+                    style={styles.suggestedPaymentButton}
+                    onPress={() => {
+                      // Always add to existing amount
+                      const currentAmount = amountPaid ? parseFormattedNumber(amountPaid) : 0;
+                      const newAmount = currentAmount + amount;
+                      setAmountPaid(newAmount.toString());
+                    }}
+                  >
+                    <Text style={styles.suggestedPaymentText}>{formatRupiah(amount)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
         )}
@@ -377,7 +458,7 @@ const PaymentPage: React.FC<PaymentPageProps> = ({
               {/* Total Amount Display */}
               <View style={styles.totalDisplay}>
                 <Text style={styles.totalLabelText}>Total</Text>
-                <Text style={styles.totalValueText}>{formatRupiah(finalTotal)}</Text>
+                <Text style={styles.totalValueText}>{formatRupiah(total)}</Text>
               </View>
               
               {/* Change/Return Amount Display */}
@@ -739,9 +820,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 10,
-    paddingTop: 10,
+    paddingTop: 15,
+    paddingBottom: 15,
     borderTopWidth: 1,
     borderTopColor: '#eee',
+    backgroundColor: '#e8f4ff',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#007AFF',
   },
   suggestedPaymentsContainer: {
     marginTop: 15,
@@ -773,12 +860,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   changeLabel: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
   },
   changeValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#007AFF',
   },
@@ -912,12 +999,11 @@ const styles = StyleSheet.create({
   // Payment Confirmation Modal Styles
   confirmationModal: {
     backgroundColor: 'white',
-    width: '100%',
+    width: '80%',
+    maxWidth: 400,
+    borderRadius: 10,
+    maxHeight: '80%',
     padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '50%',
-    paddingBottom: 80, // Increased padding to prevent overlap with Android navbar
   },
   modalTitle: {
     fontSize: 20,
@@ -994,6 +1080,38 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18, // Match the fontSize of the payment button text in cashier screen
     fontWeight: 'bold',
+  },
+  inputExplanation: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 5,
+    fontStyle: 'italic',
+  },
+  additionalPaymentMethods: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  paymentInfo: {
+    marginTop: 15,
+    padding: 10,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  paymentInfoTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 5,
+  },
+  paymentInfoText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 3,
   },
 });
 

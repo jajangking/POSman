@@ -1,0 +1,1027 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, FlatList } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+interface BarangPO {
+  id: string;
+  code: string;
+  name: string;
+  quantityOrdered: number;
+  quantityReceived: number;
+  isChecked: boolean;
+}
+
+interface BarangSusulan {
+  id: string;
+  code: string;
+  name: string;
+  quantity: number;
+}
+
+interface PenerimaanBarangScreenProps {
+  onBack: () => void;
+}
+
+const PenerimaanBarangScreen: React.FC<PenerimaanBarangScreenProps> = ({ onBack }) => {
+  // State untuk toggle input PO
+  const [usePO, setUsePO] = useState(true);
+  const [poNumber, setPoNumber] = useState('');
+  const [isLoadingPO, setIsLoadingPO] = useState(false);
+  
+  // State untuk daftar PO yang tersedia
+  const [availablePOs, setAvailablePOs] = useState<any[]>([]);
+  const [showPOList, setShowPOList] = useState(false);
+  
+  // State untuk barang dari PO
+  const [barangPO, setBarangPO] = useState<BarangPO[]>([]);
+  
+  // State untuk barang susulan
+  const [barangSusulan, setBarangSusulan] = useState<BarangSusulan[]>([]);
+  const [showAddBarangSusulan, setShowAddBarangSusulan] = useState(false);
+  const [newBarangCode, setNewBarangCode] = useState('');
+  const [newBarangName, setNewBarangName] = useState('');
+  const [newBarangQuantity, setNewBarangQuantity] = useState('');
+  
+  // State untuk penerimaan manual
+  const [manualMode, setManualMode] = useState(false);
+  const [manualBarangList, setManualBarangList] = useState<BarangSusulan[]>([]);
+  const [showAddManualBarang, setShowAddManualBarang] = useState(false);
+  
+  // State umum
+  const [supplier, setSupplier] = useState('');
+  const [receivedDate, setReceivedDate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Simulasi pengambilan data PO
+  const fetchPOData = async (poNumber: string) => {
+    setIsLoadingPO(true);
+    // Simulasi delay API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Data dummy untuk demonstrasi
+    const dummyData: BarangPO[] = [
+      { id: '1', code: 'PRD001', name: 'Produk A', quantityOrdered: 10, quantityReceived: 0, isChecked: false },
+      { id: '2', code: 'PRD002', name: 'Produk B', quantityOrdered: 5, quantityReceived: 0, isChecked: false },
+      { id: '3', code: 'PRD003', name: 'Produk C', quantityOrdered: 20, quantityReceived: 0, isChecked: false },
+    ];
+    
+    setBarangPO(dummyData);
+    setIsLoadingPO(false);
+  };
+  
+  // Simulasi pengambilan daftar PO yang tersedia
+  const fetchAvailablePOs = async () => {
+    setIsLoadingPO(true);
+    // Simulasi delay API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Data dummy untuk daftar PO tersedia
+    const dummyPOs = [
+      { id: '1', poNumber: 'PO-20230101-001', date: '01 Januari 2023', supplier: 'Supplier A' },
+      { id: '2', poNumber: 'PO-20230102-001', date: '02 Januari 2023', supplier: 'Supplier B' },
+      { id: '3', poNumber: 'PO-20230103-001', date: '03 Januari 2023', supplier: 'Supplier C' },
+      { id: '4', poNumber: 'PO-20230104-001', date: '04 Januari 2023', supplier: 'Supplier A' },
+      { id: '5', poNumber: 'PO-20230105-001', date: '05 Januari 2023', supplier: 'Supplier D' },
+    ];
+    
+    setAvailablePOs(dummyPOs);
+    setIsLoadingPO(false);
+  };
+  
+  // Handler untuk memilih PO dari daftar
+  const handleSelectPO = (po: any) => {
+    setPoNumber(po.poNumber);
+    setShowPOList(false);
+    fetchPOData(po.poNumber);
+  };
+
+  // Toggle penggunaan PO
+  const toggleUsePO = () => {
+    setUsePO(true);
+    setManualMode(false);
+    if (!usePO) {
+      setPoNumber('');
+      setBarangPO([]);
+    }
+  };
+
+  // Toggle mode manual
+  const toggleManualMode = () => {
+    setManualMode(true);
+    setUsePO(false);
+    setPoNumber('');
+    setBarangPO([]);
+  };
+
+  // Handler untuk mengambil data PO
+  const handleFetchPO = () => {
+    if (!poNumber.trim()) {
+      Alert.alert('Error', 'Masukkan nomor PO terlebih dahulu');
+      return;
+    }
+    fetchPOData(poNumber);
+  };
+
+  // Handler untuk toggle checklist barang PO
+  const toggleBarangPOCheck = (id: string) => {
+    setBarangPO(prev => 
+      prev.map(barang => 
+        barang.id === id ? { ...barang, isChecked: !barang.isChecked } : barang
+      )
+    );
+  };
+
+  // Handler untuk mengubah jumlah barang diterima
+  const handleQuantityReceivedChange = (id: string, value: string) => {
+    const quantity = parseInt(value) || 0;
+    setBarangPO(prev => 
+      prev.map(barang => 
+        barang.id === id ? { ...barang, quantityReceived: quantity } : barang
+      )
+    );
+  };
+
+  // Handler untuk menambah barang susulan
+  const handleAddBarangSusulan = () => {
+    if (!newBarangCode.trim() || !newBarangName.trim() || !newBarangQuantity.trim()) {
+      Alert.alert('Error', 'Harap isi semua field');
+      return;
+    }
+    
+    const newBarang: BarangSusulan = {
+      id: Date.now().toString(),
+      code: newBarangCode,
+      name: newBarangName,
+      quantity: parseInt(newBarangQuantity) || 0
+    };
+    
+    setBarangSusulan(prev => [...prev, newBarang]);
+    setNewBarangCode('');
+    setNewBarangName('');
+    setNewBarangQuantity('');
+    setShowAddBarangSusulan(false);
+  };
+
+  // Handler untuk menambah barang manual
+  const handleAddManualBarang = () => {
+    if (!newBarangCode.trim() || !newBarangName.trim() || !newBarangQuantity.trim()) {
+      Alert.alert('Error', 'Harap isi semua field');
+      return;
+    }
+    
+    const newBarang: BarangSusulan = {
+      id: Date.now().toString(),
+      code: newBarangCode,
+      name: newBarangName,
+      quantity: parseInt(newBarangQuantity) || 0
+    };
+    
+    setManualBarangList(prev => [...prev, newBarang]);
+    setNewBarangCode('');
+    setNewBarangName('');
+    setNewBarangQuantity('');
+    setShowAddManualBarang(false);
+  };
+
+  // Handler untuk menghapus barang susulan
+  const handleRemoveBarangSusulan = (id: string) => {
+    setBarangSusulan(prev => prev.filter(barang => barang.id !== id));
+  };
+
+  // Handler untuk menghapus barang manual
+  const handleRemoveManualBarang = (id: string) => {
+    setManualBarangList(prev => prev.filter(barang => barang.id !== id));
+  };
+
+  // Handler untuk proses penerimaan
+  const handleProcess = () => {
+    setIsProcessing(true);
+    
+    // Validasi input
+    if (usePO && !poNumber.trim()) {
+      Alert.alert('Error', 'Masukkan nomor PO terlebih dahulu');
+      setIsProcessing(false);
+      return;
+    }
+    
+    if (manualMode) {
+      if (manualBarangList.length === 0) {
+        Alert.alert('Error', 'Tambahkan minimal satu barang untuk diproses');
+        setIsProcessing(false);
+        return;
+      }
+    } else if (usePO) {
+      if (barangPO.length === 0) {
+        Alert.alert('Error', 'Ambil data PO terlebih dahulu');
+        setIsProcessing(false);
+        return;
+      }
+      
+      const checkedItems = barangPO.filter(item => item.isChecked);
+      if (checkedItems.length === 0) {
+        Alert.alert('Error', 'Centang minimal satu barang untuk diproses');
+        setIsProcessing(false);
+        return;
+      }
+    }
+    
+    // Simulasi proses
+    setTimeout(() => {
+      Alert.alert(
+        'Sukses',
+        'Penerimaan barang berhasil diproses',
+        [{ text: 'OK', onPress: () => setIsProcessing(false) }]
+      );
+    }, 1500);
+  };
+
+  // Render item barang PO
+  const renderBarangPO = ({ item }: { item: BarangPO }) => (
+    <View style={styles.barangCard}>
+      <View style={styles.barangHeader}>
+        <TouchableOpacity 
+          style={[styles.checkbox, item.isChecked && styles.checkboxChecked]}
+          onPress={() => toggleBarangPOCheck(item.id)}
+        >
+          {item.isChecked && <Text style={styles.checkmark}>✓</Text>}
+        </TouchableOpacity>
+        <View style={styles.barangInfo}>
+          <Text style={styles.barangName}>{item.name}</Text>
+          <Text style={styles.barangCode}>{item.code}</Text>
+        </View>
+      </View>
+      
+      <View style={styles.quantityContainer}>
+        <Text style={styles.quantityLabel}>Dipesan: {item.quantityOrdered}</Text>
+        <View style={styles.quantityInputContainer}>
+          <Text style={styles.quantityInputLabel}>Diterima:</Text>
+          <TextInput
+            style={styles.quantityInput}
+            value={item.quantityReceived.toString()}
+            onChangeText={(value) => handleQuantityReceivedChange(item.id, value)}
+            keyboardType="numeric"
+            editable={item.isChecked}
+          />
+        </View>
+      </View>
+    </View>
+  );
+
+  // Render item barang susulan
+  const renderBarangSusulan = ({ item }: { item: BarangSusulan }) => (
+    <View style={styles.barangCard}>
+      <View style={styles.barangHeader}>
+        <View style={styles.barangInfo}>
+          <Text style={styles.barangName}>{item.name}</Text>
+          <Text style={styles.barangCode}>{item.code}</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.removeButton}
+          onPress={() => handleRemoveBarangSusulan(item.id)}
+        >
+          <Text style={styles.removeButtonText}>×</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <View style={styles.quantityContainer}>
+        <Text style={styles.quantityLabel}>Jumlah: {item.quantity}</Text>
+      </View>
+    </View>
+  );
+
+  // Render item barang manual
+  const renderManualBarang = ({ item }: { item: BarangSusulan }) => (
+    <View style={styles.barangCard}>
+      <View style={styles.barangHeader}>
+        <View style={styles.barangInfo}>
+          <Text style={styles.barangName}>{item.name}</Text>
+          <Text style={styles.barangCode}>{item.code}</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.removeButton}
+          onPress={() => handleRemoveManualBarang(item.id)}
+        >
+          <Text style={styles.removeButtonText}>×</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <View style={styles.quantityContainer}>
+        <Text style={styles.quantityLabel}>Jumlah: {item.quantity}</Text>
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <Text style={styles.backButtonText}>← Kembali</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Penerimaan Barang</Text>
+          <View style={{ width: 60 }} />
+        </View>
+        
+        <ScrollView style={styles.scrollView}>
+          <View style={styles.content}>
+            {/* Toggle untuk menggunakan PO atau manual */}
+            <View style={styles.toggleContainer}>
+              <TouchableOpacity 
+                style={[styles.toggleButton, usePO && styles.toggleButtonActive]}
+                onPress={toggleUsePO}
+              >
+                <Text style={[styles.toggleButtonText, usePO && styles.toggleButtonTextActive]}>
+                  Gunakan PO
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.toggleButton, manualMode && styles.toggleButtonActive]}
+                onPress={toggleManualMode}
+              >
+                <Text style={[styles.toggleButtonText, manualMode && styles.toggleButtonTextActive]}>
+                  Manual
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Form input PO */}
+            {usePO && (
+              <View style={styles.formContainer}>
+                <Text style={styles.sectionTitle}>Informasi PO</Text>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>No. PO</Text>
+                  <View style={styles.poInputContainer}>
+                    <TouchableOpacity 
+                      style={[styles.input, styles.poInput]}
+                      onPress={() => {
+                        setShowPOList(true);
+                        fetchAvailablePOs();
+                      }}
+                    >
+                      <Text style={poNumber ? styles.poNumberText : styles.poPlaceholderText}>
+                        {poNumber || "Pilih dari daftar PO"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.fetchButton, isLoadingPO && styles.fetchButtonDisabled]}
+                      onPress={() => {
+                        if (poNumber) {
+                          fetchPOData(poNumber);
+                        } else {
+                          Alert.alert('Error', 'Pilih nomor PO terlebih dahulu');
+                        }
+                      }}
+                      disabled={isLoadingPO}
+                    >
+                      <Text style={styles.fetchButtonText}>
+                        {isLoadingPO ? 'Loading...' : 'Ambil'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                {/* Daftar PO yang tersedia */}
+                {showPOList && (
+                  <View style={styles.poListContainer}>
+                    <View style={styles.poListHeader}>
+                      <Text style={styles.poListTitle}>Daftar PO Tersedia</Text>
+                      <TouchableOpacity 
+                        style={styles.closeButton}
+                        onPress={() => setShowPOList(false)}
+                      >
+                        <Text style={styles.closeButtonText}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    {isLoadingPO ? (
+                      <View style={styles.loadingContainer}>
+                        <Text>Loading daftar PO...</Text>
+                      </View>
+                    ) : (
+                      <FlatList
+                        data={availablePOs}
+                        renderItem={({ item }) => (
+                          <TouchableOpacity 
+                            style={styles.poItem}
+                            onPress={() => handleSelectPO(item)}
+                          >
+                            <View style={styles.poItemHeader}>
+                              <Text style={styles.poItemNumber}>{item.poNumber}</Text>
+                              <Text style={styles.poItemDate}>{item.date}</Text>
+                            </View>
+                            <Text style={styles.poItemSupplier}>Supplier: {item.supplier}</Text>
+                          </TouchableOpacity>
+                        )}
+                        keyExtractor={(item) => item.id}
+                        style={styles.poList}
+                      />
+                    )}
+                  </View>
+                )}
+                
+                {/* Daftar barang dari PO */}
+                {barangPO.length > 0 && (
+                  <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionTitle}>Daftar Barang PO</Text>
+                      <TouchableOpacity 
+                        style={styles.addButton}
+                        onPress={() => setShowAddBarangSusulan(true)}
+                      >
+                        <Text style={styles.addButtonText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <FlatList
+                      data={barangPO}
+                      renderItem={renderBarangPO}
+                      keyExtractor={(item) => item.id}
+                      scrollEnabled={false}
+                    />
+                  </View>
+                )}
+                
+                {/* Daftar barang susulan */}
+                {barangSusulan.length > 0 && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Barang Susulan</Text>
+                    <FlatList
+                      data={barangSusulan}
+                      renderItem={renderBarangSusulan}
+                      keyExtractor={(item) => item.id}
+                      scrollEnabled={false}
+                    />
+                  </View>
+                )}
+              </View>
+            )}
+            
+            {/* Form input manual */}
+            {manualMode && (
+              <View style={styles.formContainer}>
+                <Text style={styles.sectionTitle}>Penerimaan Manual</Text>
+                
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Daftar Barang</Text>
+                    <TouchableOpacity 
+                      style={styles.addButton}
+                      onPress={() => setShowAddManualBarang(true)}
+                    >
+                      <Text style={styles.addButtonText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {manualBarangList.length > 0 ? (
+                    <FlatList
+                      data={manualBarangList}
+                      renderItem={renderManualBarang}
+                      keyExtractor={(item) => item.id}
+                      scrollEnabled={false}
+                    />
+                  ) : (
+                    <Text style={styles.emptyText}>Belum ada barang. Tekan tombol + untuk menambah.</Text>
+                  )}
+                </View>
+              </View>
+            )}
+            
+            {/* Form tambah barang susulan */}
+            {showAddBarangSusulan && (
+              <View style={styles.formContainer}>
+                <Text style={styles.sectionTitle}>Tambah Barang Susulan</Text>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Kode Barang</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newBarangCode}
+                    onChangeText={setNewBarangCode}
+                    placeholder="Masukkan kode barang"
+                  />
+                </View>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Nama Barang</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newBarangName}
+                    onChangeText={setNewBarangName}
+                    placeholder="Masukkan nama barang"
+                  />
+                </View>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Jumlah</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newBarangQuantity}
+                    onChangeText={setNewBarangQuantity}
+                    placeholder="Masukkan jumlah"
+                    keyboardType="numeric"
+                  />
+                </View>
+                
+                <View style={styles.buttonRow}>
+                  <TouchableOpacity 
+                    style={[styles.secondaryButton, styles.flexButton]}
+                    onPress={() => setShowAddBarangSusulan(false)}
+                  >
+                    <Text style={styles.secondaryButtonText}>Batal</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.primaryButton, styles.flexButton]}
+                    onPress={handleAddBarangSusulan}
+                  >
+                    <Text style={styles.primaryButtonText}>Tambah</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            
+            {/* Form tambah barang manual */}
+            {showAddManualBarang && (
+              <View style={styles.formContainer}>
+                <Text style={styles.sectionTitle}>Tambah Barang Manual</Text>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Kode Barang</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newBarangCode}
+                    onChangeText={setNewBarangCode}
+                    placeholder="Masukkan kode barang"
+                  />
+                </View>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Nama Barang</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newBarangName}
+                    onChangeText={setNewBarangName}
+                    placeholder="Masukkan nama barang"
+                  />
+                </View>
+                
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Jumlah</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={newBarangQuantity}
+                    onChangeText={setNewBarangQuantity}
+                    placeholder="Masukkan jumlah"
+                    keyboardType="numeric"
+                  />
+                </View>
+                
+                <View style={styles.buttonRow}>
+                  <TouchableOpacity 
+                    style={[styles.secondaryButton, styles.flexButton]}
+                    onPress={() => setShowAddManualBarang(false)}
+                  >
+                    <Text style={styles.secondaryButtonText}>Batal</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.primaryButton, styles.flexButton]}
+                    onPress={handleAddManualBarang}
+                  >
+                    <Text style={styles.primaryButtonText}>Tambah</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            
+            {/* Informasi tambahan */}
+            <View style={styles.formContainer}>
+              <Text style={styles.sectionTitle}>Informasi Tambahan</Text>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Supplier</Text>
+                <TextInput
+                  style={styles.input}
+                  value={supplier}
+                  onChangeText={setSupplier}
+                  placeholder="Nama supplier"
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Tanggal Terima</Text>
+                <TextInput
+                  style={styles.input}
+                  value={receivedDate}
+                  onChangeText={setReceivedDate}
+                  placeholder="DD/MM/YYYY"
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Catatan</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Catatan tambahan"
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+            </View>
+            
+            {/* Tombol proses */}
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity 
+                style={[styles.processButton, isProcessing && styles.processButtonDisabled]}
+                onPress={handleProcess}
+                disabled={isProcessing}
+              >
+                <Text style={styles.processButtonText}>
+                  {isProcessing ? 'Memproses...' : 'Proses Penerimaan'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: 'white',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  backButton: {
+    padding: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  content: {
+    padding: 20,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 5,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  toggleButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  toggleButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  toggleButtonTextActive: {
+    color: 'white',
+  },
+  formContainer: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  section: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  input: {
+    height: 50,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+  },
+  textArea: {
+    height: 100,
+    paddingTop: 15,
+    textAlignVertical: 'top',
+  },
+  poInputContainer: {
+    flexDirection: 'row',
+  },
+  poInput: {
+    flex: 1,
+    marginRight: 10,
+    justifyContent: 'center',
+  },
+  poPlaceholderText: {
+    fontSize: 16,
+    color: '#999',
+  },
+  poNumberText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  fetchButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  fetchButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  fetchButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  poListContainer: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    maxHeight: 300,
+  },
+  poListHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    paddingBottom: 10,
+  },
+  poListTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    backgroundColor: '#FF5252',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  poList: {
+    maxHeight: 200,
+  },
+  poItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  poItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  poItemNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  poItemDate: {
+    fontSize: 14,
+    color: '#666',
+  },
+  poItemSupplier: {
+    fontSize: 14,
+    color: '#666',
+  },
+  addButton: {
+    backgroundColor: '#4CAF50',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addButtonText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  barangCard: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+  },
+  barangHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  checkboxChecked: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  checkmark: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  barangInfo: {
+    flex: 1,
+  },
+  barangName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  barangCode: {
+    fontSize: 14,
+    color: '#666',
+  },
+  removeButton: {
+    backgroundColor: '#FF5252',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  quantityContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quantityLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  quantityInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  quantityInputLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 5,
+  },
+  quantityInput: {
+    width: 60,
+    height: 40,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 14,
+    backgroundColor: 'white',
+    textAlign: 'center',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  flexButton: {
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  primaryButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  buttonContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  processButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  processButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  processButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#666',
+    fontStyle: 'italic',
+    padding: 20,
+  },
+});
+
+export default PenerimaanBarangScreen;

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { DEFAULT_POINTS_CONFIG } from '../../utils/pointSystem';
 import { Member } from '../../models/Member';
-import { findMemberByPhone } from '../../services/MemberService';
+import { findMemberByPhone, calculatePointsEarned } from '../../services/MemberService';
 
 interface HeaderInfoSectionProps {
   currentTime: Date;
@@ -84,6 +84,10 @@ const HeaderInfoSection: React.FC<HeaderInfoSectionProps> = ({
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Points:</Text>
             <Text style={styles.infoValue}>{selectedMember.totalPoints} pts</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Points Earned:</Text>
+            <Text style={styles.infoValue}>{calculatePointsEarned(selectedMember.totalPurchases)} pts</Text>
           </View>
           <View style={styles.memberRow}>
             <Text style={styles.infoLabel}>Redeem Points:</Text>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Switch, Alert, Modal, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Switch, Alert, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
 import { InventoryItem, formatRupiah, parseRupiah, formatBarcode, generateProductCode } from '../models/Inventory';
 import { addInventoryItem, modifyInventoryItem, fetchAllInventoryItems } from '../services/InventoryService';
 import ScannerModal from './ScannerModal';
@@ -9,9 +9,10 @@ interface InventoryFormProps {
   item?: InventoryItem;
   onSave: () => void;
   onCancel: () => void;
+  onShowCategoryManagement?: () => void;
 }
 
-const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel }) => {
+const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, onShowCategoryManagement }) => {
   const [code, setCode] = useState(item?.code || ''); // Generated code
   const [barcode, setBarcode] = useState(item?.sku || ''); // Barcode from product
   const [name, setName] = useState(item?.name || '');
@@ -259,7 +260,6 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel })
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}>{item ? 'Edit Item' : 'Add New Item'}</Text>
         
         <View style={styles.formGroup}>
           <Text style={styles.label}>Product Code *</Text>
@@ -310,6 +310,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel })
           onCategorySelect={(selectedCategory) => {
             setCategory(selectedCategory);
           }} 
+          onNavigateToCategoryManagement={onShowCategoryManagement}
         />
       </View>
       
@@ -403,23 +404,70 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel })
         onClose={() => setScannerVisible(false)}
       />
     </ScrollView>
-    </KeyboardAvoidingView>
-  );
-};
+        
+      </KeyboardAvoidingView>
+    );
+  }
+
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingBottom: 30, // Menambahkan padding bawah agar tidak tertutup navbar android
+  },
+  formHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: 'white',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  formTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    zIndex: -1,
+  },
+  backButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backButtonText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  headerCategoryButton: {
+    backgroundColor: '#34C759',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCategoryButtonText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 14,
   },
   contentContainer: {
     padding: 15,
     backgroundColor: '#f5f5f5',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#333',
   },
   formGroup: {
     marginBottom: 10,
@@ -450,9 +498,8 @@ const styles = StyleSheet.create({
   scanButton: {
     backgroundColor: '#34C759',
     paddingHorizontal: 15,
-    justifyContent: 'center',
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
+    paddingVertical: 10,
+    borderRadius: 8,
     borderLeftWidth: 1,
     borderLeftColor: '#ddd',
   },
@@ -520,17 +567,10 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   saveButton: {
-    backgroundColor: '#007AFF',
-    marginLeft: 10,
-  },
-  cancelButtonText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
+    backgroundColor: '#007AFF', // Warna biru untuk tombol save
   },
   saveButtonText: {
     color: 'white',
-    fontSize: 16,
     fontWeight: '600',
   },
   thirdColumn: {
@@ -559,39 +599,6 @@ const styles = StyleSheet.create({
   dropdownArrow: {
     fontSize: 12,
     color: '#999',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    width: '90%',
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  modalCloseButton: {
-    padding: 5,
-  },
-  modalCloseButtonText: {
-    fontSize: 24,
-    color: '#999',
-    fontWeight: 'bold',
   },
 });
 

@@ -6,9 +6,10 @@ import { getAllCategories, addCategory } from '../services/CategoryService';
 interface CategorySelectorProps {
   selectedCategory: string;
   onCategorySelect: (categoryName: string) => void;
+  onNavigateToCategoryManagement?: () => void;
 }
 
-const CategorySelector: React.FC<CategorySelectorProps> = ({ selectedCategory, onCategorySelect }) => {
+const CategorySelector: React.FC<CategorySelectorProps> = ({ selectedCategory, onCategorySelect, onNavigateToCategoryManagement }) => {
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -34,35 +35,39 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({ selectedCategory, o
     setModalVisible(false);
   };
 
-  const handleCreateNewCategory = async () => {
+  const handleAddNewCategory = async () => {
     if (!newCategoryName.trim()) {
       Alert.alert('Error', 'Please enter a category name');
       return;
     }
-    
-    if (!newCategoryCode.trim()) {
-      Alert.alert('Error', 'Please enter a category code');
-      return;
-    }
-    
+
+    // Generate code from name if not provided
+    const code = newCategoryCode.trim() || newCategoryName.trim().substring(0, 3).toUpperCase();
+
     try {
       const newCategory = await addCategory({
         name: newCategoryName.trim(),
-        code: newCategoryCode.trim(),
+        code,
         description: newCategoryDescription.trim()
       });
+
+      // Add new category to the list
+      setCategories(prev => [...prev, newCategory]);
       
-      setCategories([...categories, newCategory]);
+      // Select the new category
       onCategorySelect(newCategory.name);
-      setModalVisible(false);
-      setShowNewCategoryForm(false);
+      
+      // Reset form and close modal
       setNewCategoryName('');
       setNewCategoryCode('');
       setNewCategoryDescription('');
+      setShowNewCategoryForm(false);
+      setModalVisible(false);
       
-      Alert.alert('Success', 'Category created successfully');
+      Alert.alert('Success', 'Category added successfully');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create category');
+      console.error('Error adding category:', error);
+      Alert.alert('Error', error.message || 'Failed to add category');
     }
   };
 
@@ -83,7 +88,11 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({ selectedCategory, o
     <>
       <TouchableOpacity 
         style={styles.selectorContainer} 
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          // Refresh categories when opening the selector
+          loadCategories();
+          setModalVisible(true);
+        }}
       >
         <Text style={[styles.selectorText, !selectedCategory && styles.placeholderText]}>
           {selectedCategory || 'Select or create a category'}
@@ -119,7 +128,6 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({ selectedCategory, o
                   ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                       <Text style={styles.emptyText}>No categories available</Text>
-                      <Text style={styles.emptySubtext}>Create your first category</Text>
                     </View>
                   }
                 />
@@ -128,11 +136,25 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({ selectedCategory, o
                   style={styles.createButton} 
                   onPress={() => setShowNewCategoryForm(true)}
                 >
-                  <Text style={styles.createButtonText}>+ Create New Category</Text>
+                  <Text style={styles.createButtonText}>+ Add New Category</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.createButton, styles.manageButton]} 
+                  onPress={() => {
+                    setModalVisible(false);
+                    if (onNavigateToCategoryManagement && typeof onNavigateToCategoryManagement === 'function') {
+                      onNavigateToCategoryManagement();
+                    }
+                  }}
+                >
+                  <Text style={styles.createButtonText}>Manage Categories</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.modalContent}>
+                <Text style={styles.formTitle}>Add New Category</Text>
+                
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Category Name *</Text>
                   <TextInput
@@ -144,39 +166,40 @@ const CategorySelector: React.FC<CategorySelectorProps> = ({ selectedCategory, o
                 </View>
                 
                 <View style={styles.formGroup}>
-                  <Text style={styles.label}>Category Code *</Text>
+                  <Text style={styles.label}>Code</Text>
                   <TextInput
                     style={styles.input}
                     value={newCategoryCode}
                     onChangeText={setNewCategoryCode}
-                    placeholder="Enter category code (e.g., 1, A)"
-                    maxLength={3}
+                    placeholder="Auto-generated from name"
                   />
                 </View>
                 
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Description</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, styles.textArea]}
                     value={newCategoryDescription}
                     onChangeText={setNewCategoryDescription}
-                    placeholder="Enter description"
+                    placeholder="Enter description (optional)"
+                    multiline
+                    numberOfLines={3}
                   />
                 </View>
                 
                 <View style={styles.buttonRow}>
                   <TouchableOpacity 
-                    style={[styles.button, styles.cancelButton]} 
+                    style={[styles.button, styles.secondaryButton]} 
                     onPress={() => setShowNewCategoryForm(false)}
                   >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                    <Text style={styles.buttonText}>Cancel</Text>
                   </TouchableOpacity>
                   
                   <TouchableOpacity 
-                    style={[styles.button, styles.saveButton]} 
-                    onPress={handleCreateNewCategory}
+                    style={[styles.button, styles.primaryButton]} 
+                    onPress={handleAddNewCategory}
                   >
-                    <Text style={styles.saveButtonText}>Create</Text>
+                    <Text style={styles.buttonText}>Add Category</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -278,6 +301,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 15,
   },
+  secondaryButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  manageButton: {
+    backgroundColor: '#007AFF', // Warna biru untuk tombol Manage Categories
+    paddingVertical: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
   createButtonText: {
     color: 'white',
     fontSize: 16,
@@ -292,9 +325,12 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 5,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
+  formTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
   },
   formGroup: {
     marginBottom: 15,
@@ -314,33 +350,27 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: 'white',
   },
+  textArea: {
+    height: 100,
+    paddingTop: 15,
+    textAlignVertical: 'top',
+  },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
+    marginTop: 10,
   },
   button: {
     flex: 1,
     paddingVertical: 15,
     borderRadius: 8,
     alignItems: 'center',
+    marginHorizontal: 5,
   },
-  cancelButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginRight: 10,
-  },
-  saveButton: {
+  primaryButton: {
     backgroundColor: '#007AFF',
-    marginLeft: 10,
   },
-  cancelButtonText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  saveButtonText: {
+  buttonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',

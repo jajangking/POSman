@@ -1,17 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, FlatList, Alert } from 'react-native';
 import { InventoryCategory } from '../models/Inventory';
-import { addCategory, deleteCategory, getAllCategories, saveCategories } from '../services/CategoryService';
+import { addCategory, deleteCategory, getAllCategories, saveCategories, getCategoryByCode } from '../services/CategoryService';
 
 const CategoryManagement: React.FC = () => {
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState('');
 
   useEffect(() => {
     loadCategories();
   }, []);
+
+  // Check if category code is already in use
+  const checkCodeAvailability = async (categoryCode: string) => {
+    if (!categoryCode.trim()) {
+      setCodeError('');
+      return;
+    }
+    
+    try {
+      const existingCategory = await getCategoryByCode(categoryCode.trim());
+      if (existingCategory) {
+        setCodeError(`Category code "${categoryCode}" is already in use by "${existingCategory.name}"`);
+      } else {
+        setCodeError('');
+      }
+    } catch (error) {
+      console.error('Error checking category code:', error);
+      setCodeError('');
+    }
+  };
+
+  // Handle code change with validation
+  const handleCodeChange = (text: string) => {
+    setCode(text);
+    // Debounce the validation to avoid too many calls
+    setTimeout(() => {
+      checkCodeAvailability(text);
+    }, 300);
+  };
 
   const loadCategories = async () => {
     try {
@@ -35,6 +65,17 @@ const CategoryManagement: React.FC = () => {
       return;
     }
     
+    // Check for duplicate code before adding
+    try {
+      const existingCategory = await getCategoryByCode(code.trim());
+      if (existingCategory) {
+        Alert.alert('Error', `Category code "${code}" is already in use by "${existingCategory.name}"`);
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking category code:', error);
+    }
+    
     try {
       const newCategory = await addCategory({
         name: name.trim(),
@@ -46,6 +87,7 @@ const CategoryManagement: React.FC = () => {
       setName('');
       setDescription('');
       setCode('');
+      setCodeError('');
       
       Alert.alert('Success', 'Category added successfully');
     } catch (error: any) {
@@ -120,12 +162,13 @@ const CategoryManagement: React.FC = () => {
         <View style={styles.formGroup}>
           <Text style={styles.label}>Category Code *</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, codeError ? styles.inputError : null]}
             value={code}
-            onChangeText={setCode}
+            onChangeText={handleCodeChange}
             placeholder="Enter category code (e.g., 1, A, DR)"
             maxLength={3}
           />
+          {codeError ? <Text style={styles.errorText}>{codeError}</Text> : null}
         </View>
         
         <TouchableOpacity style={styles.addButton} onPress={handleAddCategory}>
@@ -193,6 +236,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     fontSize: 16,
     backgroundColor: 'white',
+  },
+  inputError: {
+    borderColor: '#FF3B30',
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 12,
+    marginTop: 5,
   },
   addButton: {
     backgroundColor: '#34C759',

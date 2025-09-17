@@ -9,6 +9,7 @@ export interface InventoryItem {
   sku: string;
   supplier?: string;
   reorderLevel: number;
+  minOrder: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

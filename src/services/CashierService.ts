@@ -109,6 +109,7 @@ export const getProductByCode = async (code: string): Promise<InventoryItem | nu
         sku: result.sku || '',
         supplier: result.supplier || '',
         reorderLevel: parseInt(result.reorderLevel),
+        minOrder: result.minOrder ? parseInt(result.minOrder) : 1,
         isActive: result.isActive === 1,
         createdAt: new Date(result.createdAt),
         updatedAt: new Date(result.updatedAt)
@@ -177,7 +178,8 @@ export const saveTransaction = async (
   userId: string,
   receiptNumber: string,
   memberId?: string,
-  pointsRedeemed?: number
+  pointsRedeemed?: number,
+  paymentMethod: string = 'cash' // Add paymentMethod parameter with default 'cash'
 ): Promise<void> => {
   try {
     const database = await openDatabase();
@@ -191,9 +193,30 @@ export const saveTransaction = async (
       );
       
       const hasMemberIdColumn = columnsResult.some(column => column.name === 'memberId');
+      const hasPaymentMethodColumn = columnsResult.some(column => column.name === 'paymentMethod');
       
-      if (hasMemberIdColumn) {
-        // Use the new query with memberId if column exists
+      if (hasMemberIdColumn && hasPaymentMethodColumn) {
+        // Use the new query with memberId and paymentMethod if columns exist
+        await database.runAsync(
+          `INSERT INTO inventory_transactions 
+           (id, itemId, type, quantity, price, reason, reference, memberId, paymentMethod, createdAt, createdBy) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            Math.random().toString(36).substring(2, 15),
+            item.code,
+            'out',
+            item.qty,
+            item.price,
+            'Sale',
+            receiptNumber,
+            memberId || null,
+            paymentMethod,
+            timestamp,
+            userId
+          ]
+        );
+      } else if (hasMemberIdColumn) {
+        // Use query with memberId if column exists but no paymentMethod
         await database.runAsync(
           `INSERT INTO inventory_transactions 
            (id, itemId, type, quantity, price, reason, reference, memberId, createdAt, createdBy) 
@@ -211,8 +234,27 @@ export const saveTransaction = async (
             userId
           ]
         );
+      } else if (hasPaymentMethodColumn) {
+        // Use query with paymentMethod if column exists but no memberId
+        await database.runAsync(
+          `INSERT INTO inventory_transactions 
+           (id, itemId, type, quantity, price, reason, reference, paymentMethod, createdAt, createdBy) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            Math.random().toString(36).substring(2, 15),
+            item.code,
+            'out',
+            item.qty,
+            item.price,
+            'Sale',
+            receiptNumber,
+            paymentMethod,
+            timestamp,
+            userId
+          ]
+        );
       } else {
-        // Use the old query without memberId if column doesn't exist
+        // Use the old query without memberId or paymentMethod if columns don't exist
         await database.runAsync(
           `INSERT INTO inventory_transactions 
            (id, itemId, type, quantity, price, reason, reference, createdAt, createdBy) 

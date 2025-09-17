@@ -78,7 +78,7 @@ const InventoryManagement: React.FC<InventoryManagementProps> = ({ onAddItem, on
           width: col.id === 'stock' ? Math.max(col.width, 60) : (col.id === 'name' || col.id === 'price' ? 0 : col.width), // Increase stock width to 60
           visible: col.visible !== undefined ? col.visible : true,
           order: col.order
-        }));
+        })).filter((col: ColumnConfig) => col.id !== 'minOrder'); // Remove minOrder column if present
         setColumnConfigs(validatedConfig);
       } else {
         // Use default config with flex columns and wider stock
@@ -534,7 +534,7 @@ This action cannot be undone.`,
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <View style={styles.container}>
         {/* [0] Controls Container Start */}
         <View style={styles.controlsContainer}>
@@ -782,15 +782,16 @@ This action cannot be undone.`,
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'white',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    paddingTop: 0,
+    paddingBottom: 30, // Menambahkan padding bawah agar tidak tertutup navbar android
   },
   controlsContainer: {
     flexDirection: 'column',
-    paddingVertical: 2,
+    paddingVertical: 0,
     paddingHorizontal: 8,
     backgroundColor: 'white',
     gap: 1,
@@ -886,11 +887,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 12,
-  },
-  pageTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#333',
   },
   section: {
     flexDirection: 'row',

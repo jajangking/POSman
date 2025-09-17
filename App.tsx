@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, BackHandler, Alert } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import LoginPanel from './src/components/LoginPanel';
 import HomeDashboard from './src/components/HomeDashboard';
@@ -18,17 +19,40 @@ import CashierPage from './src/components/CashierPage'; // Import CashierPage wi
 import SettingsPage from './src/components/SettingsPage'; // Import SettingsPage
 import MemberManagementScreen from './src/components/MemberManagementScreen'; // Import MemberManagementScreen
 import DiscountPage from './src/components/DiscountPage'; // Import DiscountPage
+import ReportScreen from './src/components/ReportScreen'; // Import ReportScreen
+// Import new report screens
+import SalesReportScreen from './src/components/reports/SalesReportScreen';
+import ItemReportScreen from './src/components/reports/ItemReportScreen';
+import SOBudgetLossReportScreen from './src/components/reports/SOBudgetLossReportScreen';
+import ProfitLossReportScreen from './src/components/reports/ProfitLossReportScreen';
+import ProfitVsLossReportScreen from './src/components/reports/ProfitVsLossReportScreen';
+import DailyTransactionReportScreen from './src/components/reports/DailyTransactionReportScreen';
+// Import Stock Minimum screens
+import StockMinimumScreen from './src/components/StockMinimumScreen';
+import InputBarangMasukScreen from './src/components/InputBarangMasukScreen';
+// Import Receipt screens
+import ReceiptScreen from './src/components/ReceiptScreen';
+import ReceiptHistoryScreen from './src/components/ReceiptHistoryScreen';
+import AutomaticPOScreen from './src/components/AutomaticPOScreen'; // Import AutomaticPOScreen
+import PermintaanBarangScreen from './src/components/PermintaanBarangScreen'; // Import PermintaanBarangScreen
+import SettingMinimalOrderScreen from './src/components/SettingMinimalOrderScreen'; // Import SettingMinimalOrderScreen
+import HistoryScreen from './src/components/HistoryScreen'; // Import HistoryScreen
+import PenerimaanBarangScreen from './src/components/PenerimaanBarangScreen'; // Import PenerimaanBarangScreen
+import SetoranPage from './src/components/SetoranPage'; // Import SetoranPage
 import { User } from './src/models/User';
 import { getSOHistoryById } from './src/services/SOHistoryService';
 import { getCurrentSOSession, upsertSOSession } from './src/services/DatabaseService'; // Import the SO session functions
 import { initializeSampleProducts } from './src/services/DatabaseInitializer'; // Import database initializer
+import { InventoryItem } from './src/models/Inventory'; // Import InventoryItem
 
 // Main app component wrapped with AuthProvider
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 
@@ -36,11 +60,14 @@ export default function App() {
 const AppContent: React.FC = () => {
   const authContext = useAuth();
   const { currentUser, isAuthenticated, login, logout, isLoading } = authContext;
-  const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount' | 'report' | 'salesReport' | 'itemReport' | 'soBudgetLossReport' | 'profitLossReport' | 'profitVsLossReport' | 'dailyTransactionReport' | 'stockMinimum' | 'inputBarangMasuk' | 'receipt' | 'receiptHistory' | 'automaticPO' | 'permintaanBarang' | 'settingMinimalOrder' | 'history' | 'penerimaanBarang' | 'setoran'>('home');
+  const [navigationStack, setNavigationStack] = useState<Array<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount' | 'report' | 'salesReport' | 'itemReport' | 'soBudgetLossReport' | 'profitLossReport' | 'profitVsLossReport' | 'dailyTransactionReport' | 'stockMinimum' | 'inputBarangMasuk' | 'receipt' | 'receiptHistory' | 'automaticPO' | 'permintaanBarang' | 'settingMinimalOrder' | 'history' | 'penerimaanBarang' | 'setoran'>>(['home']);
   const [soItems, setSoItems] = useState<any[]>([]); // State to hold SO items data
   const [soReportData, setSoReportData] = useState<any>(null); // State to hold SO report data
   const [itemLogData, setItemLogData] = useState<{code: string, name: string} | null>(null); // State to hold item log data
   const [itemLogSource, setItemLogSource] = useState<'inventory' | 'soReport' | null>(null); // State to track where item log was opened from
+  const [selectedItemForStockInput, setSelectedItemForStockInput] = useState<InventoryItem | null>(null); // State to hold selected item for stock input
+  const [selectedItemForReceipt, setSelectedItemForReceipt] = useState<InventoryItem | null>(null); // State to hold selected item for receipt
   const stockOpnameRef = useRef<{ handleHardwareBackPress: () => void }>(null);
   // Hapus editSORef karena EditSO tidak lagi menggunakan forwardRef
   // Hapus partialSORef karena PartialSO tidak lagi menggunakan forwardRef
@@ -86,9 +113,9 @@ const AppContent: React.FC = () => {
         }
         return true; // Prevent default behavior
       }
-      // If we're in other views, go back to home
+      // For other views, navigate back using the navigation stack
       else {
-        setCurrentView('home');
+        handleBackNavigation();
         return true; // Prevent default behavior
       }
     });
@@ -100,7 +127,24 @@ const AppContent: React.FC = () => {
     login(user);
   };
 
-  const handleNavigate = async (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount') => {
+  // Handle back navigation using the navigation stack
+  const handleBackNavigation = () => {
+    setNavigationStack(prevStack => {
+      if (prevStack.length > 1) {
+        // Remove the current view and get the previous one
+        const newStack = prevStack.slice(0, -1);
+        const previousView = newStack[newStack.length - 1];
+        setCurrentView(previousView);
+        return newStack;
+      } else {
+        // If there's only one view in the stack, go to home
+        setCurrentView('home');
+        return ['home'];
+      }
+    });
+  };
+
+  const handleNavigate = async (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount' | 'report' | 'salesReport' | 'itemReport' | 'soBudgetLossReport' | 'profitLossReport' | 'profitVsLossReport' | 'dailyTransactionReport' | 'stockMinimum' | 'inputBarangMasuk' | 'receipt' | 'receiptHistory' | 'automaticPO' | 'permintaanBarang' | 'settingMinimalOrder' | 'history' | 'penerimaanBarang' | 'setoran') => {
     // Update session data to reflect the current view if we're in an SO session
     if (view === 'partialSO' || view === 'editSO') {
       try {
@@ -119,6 +163,22 @@ const AppContent: React.FC = () => {
         console.error('Error updating SO session with last view:', error);
       }
     }
+    
+    // Update navigation stack
+    setNavigationStack(prevStack => {
+      // If navigating to home, clear the stack and start fresh
+      if (view === 'home') {
+        return ['home'];
+      }
+      
+      // If navigating to a new view, add it to the stack
+      // But first check if we're going back (to avoid duplicates)
+      const lastView = prevStack[prevStack.length - 1];
+      if (lastView !== view) {
+        return [...prevStack, view];
+      }
+      return prevStack;
+    });
     
     setCurrentView(view);
   };
@@ -155,7 +215,7 @@ const AppContent: React.FC = () => {
       )}
       {currentView === 'inventory' && (
         <InventoryScreen 
-          onBack={() => handleNavigate('home')} 
+          onBack={handleBackNavigation} 
           onNavigateToItemLog={(itemCode, itemName) => {
             setItemLogData({code: itemCode, name: itemName});
             setItemLogSource('inventory');
@@ -164,18 +224,18 @@ const AppContent: React.FC = () => {
         />
       )}
       {currentView === 'admin' && currentUser?.role === 'admin' && (
-        <AdminDashboard onBack={() => handleNavigate('home')} />
+        <AdminDashboard onBack={handleBackNavigation} />
       )}
       {currentView === 'stockOpname' && (
         <StockOpname 
           ref={stockOpnameRef}
-          onBack={() => handleNavigate('home')} 
+          onBack={handleBackNavigation} 
           onNavigate={handleNavigate}
         />
       )}
       {currentView === 'partialSO' && (
         <PartialSO 
-          onBack={() => handleNavigate('home')} 
+          onBack={handleBackNavigation} 
           onNavigateToEditSO={(items) => {
             setSoItems(items);
             handleNavigate('editSO');
@@ -184,7 +244,7 @@ const AppContent: React.FC = () => {
       )}
       {currentView === 'grandSO' && (
         <GrandSO 
-          onBack={() => handleNavigate('home')} 
+          onBack={handleBackNavigation} 
           onNavigateToEditSO={(items) => {
             setSoItems(items);
             handleNavigate('editSO');
@@ -210,7 +270,7 @@ const AppContent: React.FC = () => {
       )}
       {currentView === 'soReport' && (
         <SOReportScreen 
-          onBack={() => handleNavigate('soHistory')} 
+          onBack={handleBackNavigation} 
           onNavigateToDashboard={() => handleNavigate('home')}
           reportData={soReportData}
           onNavigateToItemLog={(itemCode, itemName) => {
@@ -222,7 +282,7 @@ const AppContent: React.FC = () => {
       )}
       {currentView === 'soHistory' && (
         <SOHistoryScreen 
-          onBack={() => handleNavigate('home')} 
+          onBack={handleBackNavigation} 
           onViewReport={async (reportId) => {
             try {
               // Fetch the specific report data by ID
@@ -252,7 +312,7 @@ const AppContent: React.FC = () => {
       )}
       {currentView === 'monitoring' && (
         <MonitoringItemsScreen 
-          onBack={() => handleNavigate('home')}
+          onBack={handleBackNavigation}
         />
       )}
       {currentView === 'itemLog' && itemLogData && (
@@ -261,40 +321,137 @@ const AppContent: React.FC = () => {
           itemName={itemLogData.name}
           onBack={() => {
             if (itemLogSource === 'soReport') {
-              handleNavigate('soReport');
+              handleBackNavigation();
             } else {
-              handleNavigate('inventory');
+              handleBackNavigation();
             }
           }}
         />
       )}
       {currentView === 'cashier' && (
         <CashierScreen 
-          onBack={() => handleNavigate('home')}
+          onBack={handleBackNavigation}
           onNavigateToMemberManagement={() => handleNavigate('memberManagement')}
           onNavigateToSettings={() => handleNavigate('settings')}
         />
       )}
       {currentView === 'cashierPage' && (
         <CashierPage 
-          onBack={() => handleNavigate('home')}
+          onBack={handleBackNavigation}
           onNavigateToMemberManagement={() => handleNavigate('memberManagement')}
           onNavigateToSettings={() => handleNavigate('settings')}
         />
       )}
       {currentView === 'memberManagement' && (
         <MemberManagementScreen 
-          onBack={() => handleNavigate('cashier')}
+          onBack={handleBackNavigation}
         />
       )}
       {currentView === 'settings' && (
         <SettingsPage 
-          onBack={() => handleNavigate('home')}
+          onBack={handleBackNavigation}
         />
       )}
       {currentView === 'discount' && (
         <DiscountPage 
-          onBack={() => handleNavigate('home')}
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'report' && (
+        <ReportScreen 
+          onBack={handleBackNavigation}
+          onNavigateToSalesReport={() => handleNavigate('salesReport')}
+          onNavigateToItemReport={() => handleNavigate('itemReport')}
+          onNavigateToProfitLossReport={() => handleNavigate('profitLossReport')}
+          onNavigateToDailyTransactionReport={() => handleNavigate('dailyTransactionReport')}
+        />
+      )}
+      {currentView === 'salesReport' && (
+        <SalesReportScreen 
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'itemReport' && (
+        <ItemReportScreen 
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'soBudgetLossReport' && (
+        <SOBudgetLossReportScreen 
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'profitLossReport' && (
+        <ProfitLossReportScreen 
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'profitVsLossReport' && (
+        <ProfitVsLossReportScreen 
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'dailyTransactionReport' && (
+        <DailyTransactionReportScreen 
+          onBack={handleBackNavigation}
+        />
+      )}
+      
+      {currentView === 'stockMinimum' && (
+        <StockMinimumScreen 
+          onBack={handleBackNavigation}
+          onNavigateToInputBarang={(item) => {
+            setSelectedItemForStockInput(item);
+            handleNavigate('inputBarangMasuk');
+          }}
+        />
+      )}
+      {currentView === 'inputBarangMasuk' && selectedItemForStockInput && (
+        <InputBarangMasukScreen
+          item={selectedItemForStockInput}
+          onBack={handleBackNavigation}
+          onNavigateToStockMinimum={() => handleNavigate('stockMinimum')}
+        />
+      )}
+      {currentView === 'receipt' && (
+        <ReceiptScreen
+          onBack={handleBackNavigation}
+          onNavigateToReceiptHistory={() => handleNavigate('receiptHistory')}
+        />
+      )}
+      {currentView === 'receiptHistory' && (
+        <ReceiptHistoryScreen
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'automaticPO' && (
+        <AutomaticPOScreen
+          onBack={handleBackNavigation}
+          onNavigateToSettingMinimalOrder={() => handleNavigate('settingMinimalOrder')}
+          onNavigateToPermintaanBarang={() => handleNavigate('permintaanBarang')}
+          onNavigateToHistory={() => handleNavigate('history')}
+          onNavigateToPenerimaanBarang={() => handleNavigate('penerimaanBarang')}
+        />
+      )}
+      {currentView === 'penerimaanBarang' && (
+        <PenerimaanBarangScreen
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'permintaanBarang' && (
+        <PermintaanBarangScreen
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'settingMinimalOrder' && (
+        <SettingMinimalOrderScreen
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'setoran' && (
+        <SetoranPage 
+          onBack={handleBackNavigation}
+          currentUser={currentUser!}
         />
       )}
     </View>
