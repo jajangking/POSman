@@ -39,6 +39,9 @@ import SettingMinimalOrderScreen from './src/components/SettingMinimalOrderScree
 import HistoryScreen from './src/components/HistoryScreen'; // Import HistoryScreen
 import PenerimaanBarangScreen from './src/components/PenerimaanBarangScreen'; // Import PenerimaanBarangScreen
 import SetoranPage from './src/components/SetoranPage'; // Import SetoranPage
+// Import new screens
+import ToppingScreen from './src/components/ToppingScreen'; // Import ToppingScreen
+import KitchenScreen from './src/components/KitchenScreen'; // Import KitchenScreen
 import { User } from './src/models/User';
 import { getSOHistoryById } from './src/services/SOHistoryService';
 import { getCurrentSOSession, upsertSOSession } from './src/services/DatabaseService'; // Import the SO session functions
@@ -60,8 +63,8 @@ export default function App() {
 const AppContent: React.FC = () => {
   const authContext = useAuth();
   const { currentUser, isAuthenticated, login, logout, isLoading } = authContext;
-  const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount' | 'report' | 'salesReport' | 'itemReport' | 'soBudgetLossReport' | 'profitLossReport' | 'profitVsLossReport' | 'dailyTransactionReport' | 'stockMinimum' | 'inputBarangMasuk' | 'receipt' | 'receiptHistory' | 'automaticPO' | 'permintaanBarang' | 'settingMinimalOrder' | 'history' | 'penerimaanBarang' | 'setoran'>('home');
-  const [navigationStack, setNavigationStack] = useState<Array<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount' | 'report' | 'salesReport' | 'itemReport' | 'soBudgetLossReport' | 'profitLossReport' | 'profitVsLossReport' | 'dailyTransactionReport' | 'stockMinimum' | 'inputBarangMasuk' | 'receipt' | 'receiptHistory' | 'automaticPO' | 'permintaanBarang' | 'settingMinimalOrder' | 'history' | 'penerimaanBarang' | 'setoran'>>(['home']);
+  const [currentView, setCurrentView] = useState<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount' | 'report' | 'salesReport' | 'itemReport' | 'soBudgetLossReport' | 'profitLossReport' | 'profitVsLossReport' | 'dailyTransactionReport' | 'stockMinimum' | 'inputBarangMasuk' | 'receipt' | 'receiptHistory' | 'automaticPO' | 'permintaanBarang' | 'settingMinimalOrder' | 'history' | 'penerimaanBarang' | 'setoran' | 'topping' | 'kitchen'>('home');
+  const [navigationStack, setNavigationStack] = useState<Array<'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount' | 'report' | 'salesReport' | 'itemReport' | 'soBudgetLossReport' | 'profitLossReport' | 'profitVsLossReport' | 'dailyTransactionReport' | 'stockMinimum' | 'inputBarangMasuk' | 'receipt' | 'receiptHistory' | 'automaticPO' | 'permintaanBarang' | 'settingMinimalOrder' | 'history' | 'penerimaanBarang' | 'setoran' | 'topping' | 'kitchen'>>(['home']);
   const [soItems, setSoItems] = useState<any[]>([]); // State to hold SO items data
   const [soReportData, setSoReportData] = useState<any>(null); // State to hold SO report data
   const [itemLogData, setItemLogData] = useState<{code: string, name: string} | null>(null); // State to hold item log data
@@ -144,7 +147,7 @@ const AppContent: React.FC = () => {
     });
   };
 
-  const handleNavigate = async (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount' | 'report' | 'salesReport' | 'itemReport' | 'soBudgetLossReport' | 'profitLossReport' | 'profitVsLossReport' | 'dailyTransactionReport' | 'stockMinimum' | 'inputBarangMasuk' | 'receipt' | 'receiptHistory' | 'automaticPO' | 'permintaanBarang' | 'settingMinimalOrder' | 'history' | 'penerimaanBarang' | 'setoran') => {
+  const handleNavigate = async (view: 'home' | 'inventory' | 'admin' | 'stockOpname' | 'partialSO' | 'grandSO' | 'editSO' | 'soReport' | 'soHistory' | 'monitoring' | 'itemLog' | 'cashier' | 'cashierPage' | 'memberManagement' | 'settings' | 'discount' | 'report' | 'salesReport' | 'itemReport' | 'soBudgetLossReport' | 'profitLossReport' | 'profitVsLossReport' | 'dailyTransactionReport' | 'stockMinimum' | 'inputBarangMasuk' | 'receipt' | 'receiptHistory' | 'automaticPO' | 'permintaanBarang' | 'settingMinimalOrder' | 'history' | 'penerimaanBarang' | 'setoran' | 'topping' | 'kitchen') => {
     // Update session data to reflect the current view if we're in an SO session
     if (view === 'partialSO' || view === 'editSO') {
       try {
@@ -452,6 +455,16 @@ const AppContent: React.FC = () => {
         <SetoranPage 
           onBack={handleBackNavigation}
           currentUser={currentUser!}
+        />
+      )}
+      {currentView === 'topping' && (
+        <ToppingScreen 
+          onBack={handleBackNavigation}
+        />
+      )}
+      {currentView === 'kitchen' && (
+        <KitchenScreen 
+          onBack={handleBackNavigation}
         />
       )}
     </View>
