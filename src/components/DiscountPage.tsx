@@ -506,6 +506,10 @@ const DiscountPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <Text style={styles.settingsButtonText}>⚙️</Text>
           </TouchableOpacity>
         </View>
+        {/* Label dalam pengembangan */}
+        <View style={styles.developmentLabel}>
+          <Text style={styles.developmentText}>DALAM PENGEMBANGAN</Text>
+        </View>
         
         <FlatList
           data={items}

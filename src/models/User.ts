@@ -10,6 +10,14 @@ export interface User {
   lastLogin?: Date;
 }
 
+export interface CreateUserParams {
+  id: string;
+  email: string;
+  role: UserRole;
+  name: string;
+  createdBy: string;
+}
+
 export type UserRole = 'admin' | 'staff' | 'customer' | 'guest';
 
 export const userRoles: UserRole[] = ['admin', 'staff', 'customer', 'guest'];

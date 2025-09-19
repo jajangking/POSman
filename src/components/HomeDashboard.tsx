@@ -27,7 +27,18 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
         <ScrollView style={styles.scrollView}>
           <View style={styles.content}>
             <View style={styles.actionsGrid}>
-              {/* Core Business Operations */}
+              {/* Core Business Operations - Reordered according to requirements */}
+              {(user.role === 'admin' || user.role === 'staff') && (
+                <TouchableOpacity 
+                  style={styles.actionCard} 
+                  onPress={() => onNavigate('inventory')}
+                >
+                  <Text style={styles.actionIcon}>📦</Text>
+                  <Text style={styles.actionTitle}>Inventory</Text>
+                  <Text style={styles.actionDescription}>Kelola produk dan stok</Text>
+                </TouchableOpacity>
+              )}
+              
               <TouchableOpacity 
                 style={styles.actionCard} 
                 onPress={() => onNavigate('cashier')}
@@ -35,6 +46,15 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
                 <Text style={styles.actionIcon}>💰</Text>
                 <Text style={styles.actionTitle}>Kasir</Text>
                 <Text style={styles.actionDescription}>Proses transaksi</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.actionCard} 
+                onPress={() => onNavigate('report')}
+              >
+                <Text style={styles.actionIcon}>📊</Text>
+                <Text style={styles.actionTitle}>Laporan</Text>
+                <Text style={styles.actionDescription}>Lihat laporan bisnis</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -49,45 +69,13 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
               {(user.role === 'admin' || user.role === 'staff') && (
                 <TouchableOpacity 
                   style={styles.actionCard} 
-                  onPress={() => onNavigate('inventory')}
+                  onPress={() => onNavigate('stockOpname')}
                 >
-                  <Text style={styles.actionIcon}>📦</Text>
-                  <Text style={styles.actionTitle}>Inventory</Text>
-                  <Text style={styles.actionDescription}>Kelola produk dan stok</Text>
+                  <Text style={styles.actionIcon}>📋</Text>
+                  <Text style={styles.actionTitle}>Stock Opname</Text>
+                  <Text style={styles.actionDescription}>Rekonsiliasi inventaris</Text>
                 </TouchableOpacity>
               )}
-              
-              {(user.role === 'admin' || user.role === 'staff') && (
-                <TouchableOpacity 
-                  style={styles.actionCard} 
-                  onPress={() => onNavigate('topping')}
-                >
-                  <Text style={styles.actionIcon}>🍒</Text>
-                  <Text style={styles.actionTitle}>Topping</Text>
-                  <Text style={styles.actionDescription}>Kelola topping produk</Text>
-                </TouchableOpacity>
-              )}
-              
-              {(user.role === 'admin' || user.role === 'staff') && (
-                <TouchableOpacity 
-                  style={styles.actionCard} 
-                  onPress={() => onNavigate('kitchen')}
-                >
-                  <Text style={styles.actionIcon}>👨‍🍳</Text>
-                  <Text style={styles.actionTitle}>Dapur</Text>
-                  <Text style={styles.actionDescription}>Monitoring pesanan dapur</Text>
-                </TouchableOpacity>
-              )}
-              
-              {/* Financial & Reporting */}
-              <TouchableOpacity 
-                style={styles.actionCard} 
-                onPress={() => onNavigate('report')}
-              >
-                <Text style={styles.actionIcon}>📊</Text>
-                <Text style={styles.actionTitle}>Laporan</Text>
-                <Text style={styles.actionDescription}>Lihat laporan bisnis</Text>
-              </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.actionCard} 
@@ -100,6 +88,15 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
               
               <TouchableOpacity 
                 style={styles.actionCard} 
+                onPress={() => onNavigate('automaticPO')}
+              >
+                <Text style={styles.actionIcon}>🛒</Text>
+                <Text style={styles.actionTitle}>PO Otomatis</Text>
+                <Text style={styles.actionDescription}>Purchase Order otomatis</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.actionCard} 
                 onPress={() => onNavigate('setoran')}
               >
                 <Text style={styles.actionIcon}>💼</Text>
@@ -107,26 +104,36 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
                 <Text style={styles.actionDescription}>Catat setoran kas harian</Text>
               </TouchableOpacity>
               
-              {/* Inventory Management */}
+              {/* Additional features */}
               {(user.role === 'admin' || user.role === 'staff') && (
                 <TouchableOpacity 
                   style={styles.actionCard} 
-                  onPress={() => onNavigate('stockOpname')}
+                  onPress={() => onNavigate('topping')}
                 >
-                  <Text style={styles.actionIcon}>📋</Text>
-                  <Text style={styles.actionTitle}>Stock Opname</Text>
-                  <Text style={styles.actionDescription}>Rekonsiliasi inventaris</Text>
+                  <Text style={styles.actionIcon}>🍒</Text>
+                  <Text style={styles.actionTitle}>Topping</Text>
+                  <Text style={styles.actionDescription}>Kelola topping produk</Text>
+                  {/* Label dalam pengembangan */}
+                  <View style={styles.developmentLabel}>
+                    <Text style={styles.developmentText}>DALAM PENGEMBANGAN</Text>
+                  </View>
                 </TouchableOpacity>
               )}
               
-              <TouchableOpacity 
-                style={styles.actionCard} 
-                onPress={() => onNavigate('automaticPO')}
-              >
-                <Text style={styles.actionIcon}>🛒</Text>
-                <Text style={styles.actionTitle}>PO Otomatis</Text>
-                <Text style={styles.actionDescription}>Purchase Order otomatis</Text>
-              </TouchableOpacity>
+              {(user.role === 'admin' || user.role === 'staff') && (
+                <TouchableOpacity 
+                  style={styles.actionCard} 
+                  onPress={() => onNavigate('kitchen')}
+                >
+                  <Text style={styles.actionIcon}>👨‍🍳</Text>
+                  <Text style={styles.actionTitle}>Dapur</Text>
+                  <Text style={styles.actionDescription}>Monitoring pesanan dapur</Text>
+                  {/* Label dalam pengembangan */}
+                  <View style={styles.developmentLabel}>
+                    <Text style={styles.developmentText}>DALAM PENGEMBANGAN</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
               
               {/* Admin Functions */}
               {user.role === 'admin' && (
@@ -137,6 +144,10 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
                   <Text style={styles.actionIcon}>⚙️</Text>
                   <Text style={styles.actionTitle}>Settings</Text>
                   <Text style={styles.actionDescription}>Konfigurasi pengaturan aplikasi</Text>
+                  {/* Label dalam pengembangan */}
+                  <View style={styles.developmentLabel}>
+                    <Text style={styles.developmentText}>DALAM PENGEMBANGAN</Text>
+                  </View>
                 </TouchableOpacity>
               )}
               
@@ -148,6 +159,10 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ user, onNavigate, onLogou
                   <Text style={styles.actionIcon}>🏷️</Text>
                   <Text style={styles.actionTitle}>Discount</Text>
                   <Text style={styles.actionDescription}>Kelola aturan dan pengaturan diskon</Text>
+                  {/* Label dalam pengembangan */}
+                  <View style={styles.developmentLabel}>
+                    <Text style={styles.developmentText}>DALAM PENGEMBANGAN</Text>
+                  </View>
                 </TouchableOpacity>
               )}
             </View>
@@ -248,6 +263,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 1,
     alignItems: 'center',
+    position: 'relative',
   },
   actionIcon: {
     fontSize: 32,
@@ -263,6 +279,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+  },
+  developmentLabel: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#FF9500',
+    borderRadius: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+  },
+  developmentText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: 'white',
+    textTransform: 'uppercase',
   },
   adminSection: {
     marginTop: 30,

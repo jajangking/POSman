@@ -181,6 +181,17 @@ export const initDatabase = async (): Promise<void> => {
       );
     `);
     
+    // Create report_history table
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS report_history (
+        id TEXT PRIMARY KEY,
+        reportType TEXT NOT NULL,
+        date TEXT NOT NULL,
+        accessTime TEXT NOT NULL,
+        createdAt TEXT NOT NULL
+      );
+    `);
+    
     // Create store_settings table with migration
     try {
       // Try to create the table
